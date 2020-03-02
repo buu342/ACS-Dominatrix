@@ -1105,6 +1105,9 @@ function void CPInfoDraw(int plynum, str cpdata, int cpCount, int scrW, int scrH
 
 	if (GetUserCVar(plynum, "dominatrix_showallcps"))
 	{
+		int yCP = 0.1;
+		if (GetCVar("__clientsync_gamestate") == GAME_RUNNING && GetCVar("dominatrix_timemax") != 0)
+			yCP = 12.1;
 		int maxW = 24*(GetCVar("__clientsync_cpcount")-1);
 		SetHudSize(scrW, scrH, false);
 
@@ -1114,21 +1117,21 @@ function void CPInfoDraw(int plynum, str cpdata, int cpCount, int scrW, int scrH
 		else
 			spr_back2 = "SMALGREY";
 		SetFont(spr_back2);
-		HudMessage(s:"A"; HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_CPBACKSM+cpCount, CR_WHITE, (scrW/2-maxW/2+cpCount*24 << 16), 12.1, 1.0);
+		HudMessage(s:"A"; HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_CPBACKSM+cpCount, CR_WHITE, (scrW/2-maxW/2+cpCount*24 << 16), yCP, 1.0);
 
 		// Draw the color
 		SetFont(spr_col2);
 		if (spr_col2 == -1)
 			HudMessage(s:""; HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_CPCOLRSM+cpCount, CR_WHITE, 0.0, 0.0, 1.0);
 		else
-			HudMessage(s:"A"; HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_CPCOLRSM+cpCount, CR_WHITE, (scrW/2-maxW/2+cpCount*24 << 16), 12.1, 1.0);
+			HudMessage(s:"A"; HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_CPCOLRSM+cpCount, CR_WHITE, (scrW/2-maxW/2+cpCount*24 << 16), yCP, 1.0);
 
 		// Draw the extra info
 		SetFont(spr_info2);
 		if (spr_info2 == -1)
 			HudMessage(s:""; HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_CPINFOSM+cpCount, CR_WHITE, 0.0, 0.0, 1.0);
 		else
-			HudMessage(s:"A"; HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_CPINFOSM+cpCount, CR_WHITE, (scrW/2-maxW/2+cpCount*24 << 16), 12.1, 1.0);
+			HudMessage(s:"A"; HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_CPINFOSM+cpCount, CR_WHITE, (scrW/2-maxW/2+cpCount*24 << 16), yCP, 1.0);
 	}
 }
 
