@@ -1,5 +1,5 @@
 # ACS-Dominatrix
-A highly configurable domination gamemode replacement for Zandronum, ZDoom, and ZDaemon (coming soon).
+A highly configurable domination gamemode replacement for Zandronum, ZDoom, and ZDaemon. ZDaemon compatiblity is not yet finished, as the DECORATE assets need to be converted to DeHackEd.
 
 This WAD requested by the MDF community.<br/><br/>
 
