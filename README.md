@@ -17,9 +17,9 @@ Script 1 OPEN
 <br/><br/>
 
 ### How to compile the ACS
-  **1)** Go to your Zandronum ACC folder (For instance, in Doom Builder\Compilers\Zandronum).
-  **2)** Place [zdaemon.acs](http://downloads.zdaemon.org/zdaemon.acs) in that folder.
-  **3)** Edit acc.cfg in the same folder and add `zdaemon = "zdaemon.acs";` to the `zdoom_acc {...}` section.
+  **1)** Go to your Zandronum ACC folder (For instance, in Doom Builder\Compilers\Zandronum).<br/>
+  **2)** Place [zdaemon.acs](http://downloads.zdaemon.org/zdaemon.acs) in that folder.<br/>
+  **3)** Edit acc.cfg in the same folder and add `zdaemon = "zdaemon.acs";` to the `zdoom_acc {...}` section.<br/>
   **4)** Compile, and place the binary between the A_START and A_END lumps, ensuring the lump itself is called DOMNATRX.
 <br/><br/>
 
