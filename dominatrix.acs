@@ -372,6 +372,14 @@ Script "Dominatrix_HandleScore" (void)
     if (global_gamestate == GAME_RUNNING)
         timetoend = timecur+GetCVar("dominatrix_timemax")*SECOND;
 
+	// Don't touch the game logic if no one's playing currently
+	if (PlayerCount() == 0)
+	{
+		delay(1);
+		restart;
+	}
+
+	// Game logic
     while (true)
     {
         timecur = Timer();
@@ -402,9 +410,9 @@ Script "Dominatrix_HandleScore" (void)
             if ((GetCVar("dominatrix_timemax") != 0 && timeup) || (GetCVar("dominatrix_scoremax") != 0 && scoreup))
             {
                 // Decide how the game ended
-                if (global_scoreteamblue >= GetCVar("dominatrix_scoremax") && global_scoreteamred < GetCVar("dominatrix_scoremax"))
+                if ((global_scoreteamblue >= GetCVar("dominatrix_scoremax") && global_scoreteamred < GetCVar("dominatrix_scoremax")) || global_scoreteamblue > global_scoreteamred)
                     global_gamestate = GAME_BLUEWIN;
-                else if (global_scoreteamred >= GetCVar("dominatrix_scoremax") && global_scoreteamblue < GetCVar("dominatrix_scoremax"))
+                else if ((global_scoreteamred >= GetCVar("dominatrix_scoremax") && global_scoreteamblue < GetCVar("dominatrix_scoremax")) || global_scoreteamblue < global_scoreteamred)
                     global_gamestate = GAME_REDWIN;
                 else
                     global_gamestate = GAME_DRAWWIN;
