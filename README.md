@@ -1,4 +1,4 @@
-# ACS-Dominatrix
+# Dominatrix
 A highly configurable domination gamemode replacement for Zandronum, ZDoom, and ZDaemon. ZDaemon compatiblity is not yet finished, as the DECORATE assets need to be converted to DeHackEd.
 
 This WAD requested by the MDF community.<br/><br/>
@@ -14,6 +14,8 @@ Script 1 OPEN
 	SpawnForced("ControlPoint_Red", 416.0, -416.0, 8.0);
 }
 ```
+  **3)** Ensure the server is running "Team Deathmatch" as the selected gamemode. 
+  **4)** Ensure the score limit and time limit is both set to 0 to prevent conflicts with Dominatrix. I would also recommend disabling the announcer as this gamemode comes with its own. 
 <br/><br/>
 
 ### How to compile the ACS
