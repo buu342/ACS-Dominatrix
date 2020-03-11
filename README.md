@@ -14,7 +14,7 @@ Script 1 OPEN
 	SpawnForced("ControlPoint_Red", 416.0, -416.0, 8.0);
 }
 ```
-  **3)** Ensure the server is running "Team Deathmatch" as the selected gamemode. 
+  **3)** Ensure the server is running "Team Deathmatch" as the selected gamemode. <br/>
   **4)** Ensure the score limit and time limit is both set to 0 to prevent conflicts with Dominatrix. I would also recommend disabling the announcer as this gamemode comes with its own. 
 <br/><br/>
 
