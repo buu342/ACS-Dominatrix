@@ -42,6 +42,11 @@ dominatrix_scoreperfrag   = 1;     // How many points to you get for fragging pl
 dominatrix_scoreperfragcp = 1;     // How many points do you get per frag PER control point
 dominatrix_scoretime      = 1.0;   // How many seconds for you to gain score for owning control points? (0.0 to not use time based scoring)
 dominatrix_scorepercp     = 1;     // How many points per second do you get PER control point
+
+dominatrix_scorelimitpercp     = 0; // Increase the max score by this number multiplied by the number of CPs.
+dominatrix_scorelimitperplayer = 0; // Increase the max score by this number multiplied by the number of players.
+dominatrix_timelimitpercp      = 0; // Increase the max time by this number multiplied by the number of CPs.
+dominatrix_timelimitperplayer  = 0; // Increase the max time by this number multiplied by the number of players.
 ```
 <br/><br/>
 
@@ -56,5 +61,17 @@ dominatrix_hudwidescreen = true; // Use a widescreen HUD
 <br/><br/>
 
 ### Changelog
+**Version 1.1**
+* +[Game now shows why it ended](https://github.com/buu342/ACS-Dominatrix/issues/14)
+* +[Created a credits lump](https://github.com/buu342/ACS-Dominatrix/issues/6)
+* +[Added a CVar for game freeze time duration when the round ends](https://github.com/buu342/ACS-Dominatrix/issues/5)
+* +[Added CVars for dynamic score/time](https://github.com/buu342/ACS-Dominatrix/issues/10)
+* \*[Fixed an issue regarding team health regen](https://github.com/buu342/ACS-Dominatrix/issues/13)
+* \*[Fixed an issue in the HUD shoiwng health regen incorrectly](https://github.com/buu342/ACS-Dominatrix/issues/12)
+* \*[Made some networking opimizations by making CP XYZ values static](https://github.com/buu342/ACS-Dominatrix/issues/11)
+* \*[Made it so CP's can take a new line in player HUDs](https://github.com/buu342/ACS-Dominatrix/issues/8)
+* \*[Moved the timer to show below the CP's](https://github.com/buu342/ACS-Dominatrix/issues/7)
+* \*[Made it so CP's cant be modified when a game ends](https://github.com/buu342/ACS-Dominatrix/issues/4)
+
 **Version 1.0**
 * Initial release
