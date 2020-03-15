@@ -8,12 +8,14 @@
 ===================================================================================================*/
 
 #define DUMMY ""        // Needed to prevent text bugs from ocurring
-#define VERSION "1.0"
-
-#define MAXPLAYERS 64    // No need to change unless Zandronum decides to use 128 bits
-#define MAXCONTROLPOINTS  10
+#define VERSION "1.1"
 #define SECOND 35
 
+#define MAXPLAYERS 64       // No need to change unless Zandronum decides to use 128 bits
+#define MAXCONTROLPOINTS 10 // Maximum number of Control points
+#define CPPERLINEHUD 10		// Maximum number of CP's per line in your HUD
+
+// Macros for Message ID's
 #define MSGID_CONSOLE  -1
 #define MSGID_HUDSTATE 5
 #define MSGID_HUDREDS  6
@@ -26,49 +28,64 @@
 #define MSGID_CPCOLRSM 20+MAXCONTROLPOINTS*4+1
 #define MSGID_CPBACKSM 20+MAXCONTROLPOINTS*5+1
 
+// Macros for translations
 #define TRANSLATION_GREY  1
 #define TRANSLATION_2BLUE 2
 #define TRANSLATION_BLUE  3
 #define TRANSLATION_2RED  4
 #define TRANSLATION_RED   5
 
+// Macros for Teams
 #define TEAM_NONE -1
 //#define TEAM_BLUE 0 // Already defined by ZDoom
 //#define TEAM_RED 1  // Already defined by ZDoom
 
+// Macros for Thing ID's
 #define TID_PLAYER    1337
 #define TID_CP        2337
 
+// Macros for CP data
 #define CPDATA_TID       0
 #define CPDATA_TEAM      1
 #define CPDATA_CAPAMOUNT 2
 #define CPDATA_LASTREGEN 3
 #define CPDATA_STATUS    4
+#define CPDATA_X         5
+#define CPDATA_Y         6
+#define CPDATA_Z         7
 
+// Macros for game state
 #define GAME_WARMUP  0 // To Implement
 #define GAME_RUNNING 1
 #define GAME_BLUEWIN 2
 #define GAME_REDWIN  3
 #define GAME_DRAWWIN 4
 
+// Macros for CP status
 #define CPSTATUS_IDLE      0
 #define CPSTATUS_BLUECAP   1
 #define CPSTATUS_REDCAP    2
 #define CPSTATUS_STUCKRED  3
 #define CPSTATUS_STUCKBLUE 4
 
+// Macros for announcer sound
 #define ANNOUNCE_EMPTY    0
 #define ANNOUNCE_BLUEGREY 1
 #define ANNOUNCE_REDGREY  2
 #define ANNOUNCE_BLUE     3
 #define ANNOUNCE_RED      4
 
+// Macros for why the game ended
+#define END_NONE  0
+#define END_SCORE 1
+#define END_TIME  2
+
 
 /*===================================================================================================
                                           Global Variables
 ===================================================================================================*/
 bool global_gameinitialized;
-int global_controlpoints[MAXCONTROLPOINTS][5];
+int global_controlpoints[MAXCONTROLPOINTS][8];
 int global_players[MAXPLAYERS];
 
 int global_cpcount;
@@ -76,6 +93,7 @@ int global_cpcountblue;
 int global_cpcountred;
 
 int global_gamestate;
+int global_gameend;
 int global_scoreteamblue;
 int global_scoreteamred;
 int global_time;
@@ -97,6 +115,7 @@ Script "Dominatrix_Initialize" OPEN
     global_scoreteamblue = 0;
 	global_time = 0;
 	global_announcement = ANNOUNCE_EMPTY;
+	global_gameend = END_NONE;
 
     global_gamestate = GAME_RUNNING;
 
@@ -185,6 +204,7 @@ Script "Dominatrix_Logic" (void)
 bool temp_playercappingid[MAXPLAYERS];
 Script "Dominatrix_HandleControlPoints" (void)
 {
+	int i;
     int plytid;
     int plyteam;
 	global_announcement = ANNOUNCE_EMPTY;
@@ -195,10 +215,23 @@ Script "Dominatrix_HandleControlPoints" (void)
 		// Todo
 	}
 
+	// If the game is over, don't do any more control point handling
+	if (global_gamestate != GAME_WARMUP && global_gamestate != GAME_RUNNING)
+	{
+		// Set all CPs as idle
+		for (i=0; i<MAXCONTROLPOINTS; i++)
+		{
+			// If this control point isn't registered, move to the next one
+			if (global_controlpoints[i][CPDATA_TID] == 0)
+				continue;
+			global_controlpoints[i][CPDATA_STATUS] = CPSTATUS_IDLE;
+		}
+		terminate;
+	}
+
     // Cycle through all control points
     for (int j=0; j<MAXCONTROLPOINTS; j++)
     {
-        int i;
         int bluecaps = 0;
         int redcaps = 0;
 
@@ -243,8 +276,11 @@ Script "Dominatrix_HandleControlPoints" (void)
                 continue;
 
             // Ignore if the control point is at max hp
-            if (global_controlpoints[j][CPDATA_CAPAMOUNT] == 100.0)
+            if (global_controlpoints[j][CPDATA_CAPAMOUNT] >= 100.0)
+			{
+				global_controlpoints[j][CPDATA_CAPAMOUNT] = 100.0;
                 continue;
+			}
 
             // Add blue's capture to the capture amount
             if (GetCVar("dominatrix_capmultiple"))
@@ -268,8 +304,11 @@ Script "Dominatrix_HandleControlPoints" (void)
                 continue;
 
             // Ignore if the control point is at max hp
-            if (global_controlpoints[j][CPDATA_CAPAMOUNT] == -100.0)
+            if (global_controlpoints[j][CPDATA_CAPAMOUNT] <= -100.0)
+			{
+				global_controlpoints[j][CPDATA_CAPAMOUNT] = -100.0;
                 continue;
+			}
 
             // Add red's capture to the capture amount
             if (GetCVar("dominatrix_capmultiple"))
@@ -332,7 +371,7 @@ Script "Dominatrix_HandleControlPoints" (void)
         bool capteamregen = GetCVar("dominatrix_capteamregen");
         if (cpid != -1 && (!capteamregen && plyteam != cpteam) || (capteamregen && cpamount != 100.0 && cpamount != -100.0))
         {
-            int capamount = global_controlpoints[cpid][CPDATA_CAPAMOUNT] >> 16;
+            int capamount = floor(global_controlpoints[cpid][CPDATA_CAPAMOUNT]);
 
             // Draw the capture HUD
             if (capamount < 0)
@@ -365,12 +404,16 @@ Script "Dominatrix_HandleControlPoints" (void)
 // Handle team score
 Script "Dominatrix_HandleScore" (void)
 {
+	// Wait a little bit for CP's to spawn and stuff
+	delay(5);
+
+	int dynamicTimeExtra = GetCVar("dominatrix_timelimitpercp")*global_cpcount + GetCVar("dominatrix_timelimitperplayer")*PlayerCount();
     int timecur = Timer();
     int timetoscore = timecur+((FixedMul(SECOND<<16, GetCVar("dominatrix_scoretime")))>>16);
     int timewarmup = timecur + GetCVar("dominatrix_timewarmup")*SECOND;
     int timetoend = timewarmup;
     if (global_gamestate == GAME_RUNNING)
-        timetoend = timecur+GetCVar("dominatrix_timemax")*SECOND;
+        timetoend = timecur+(GetCVar("dominatrix_timemax")+dynamicTimeExtra)*SECOND;
 
 	// Don't touch the game logic if no one's playing currently
 	if (PlayerCount() == 0)
@@ -403,26 +446,35 @@ Script "Dominatrix_HandleScore" (void)
         // Handle winning
         if (GetCVar("dominatrix_scoremax") != 0 || GetCVar("dominatrix_timemax") != 0)
         {
+			int dynamicScoreExtra = GetCVar("dominatrix_scorelimitpercp")*global_cpcount + GetCVar("dominatrix_scorelimitperplayer")*PlayerCount();
+			int maxscore = GetCVar("dominatrix_scoremax")+dynamicScoreExtra;
+
             bool timeup  = (timetoend-timecur) <= 0;
-            bool scoreup = GetCVar("dominatrix_scoremax") <= global_scoreteamblue || GetCVar("dominatrix_scoremax") <= global_scoreteamred;
+            bool scoreup = maxscore <= global_scoreteamblue || maxscore <= global_scoreteamred;
 
             // If time is up or a team beat the max score
             if ((GetCVar("dominatrix_timemax") != 0 && timeup) || (GetCVar("dominatrix_scoremax") != 0 && scoreup))
             {
                 // Decide how the game ended
-                if ((global_scoreteamblue >= GetCVar("dominatrix_scoremax") && global_scoreteamred < GetCVar("dominatrix_scoremax")) || global_scoreteamblue > global_scoreteamred)
+                if ((global_scoreteamblue >= maxscore && global_scoreteamred < maxscore) || global_scoreteamblue > global_scoreteamred)
                     global_gamestate = GAME_BLUEWIN;
-                else if ((global_scoreteamred >= GetCVar("dominatrix_scoremax") && global_scoreteamblue < GetCVar("dominatrix_scoremax")) || global_scoreteamblue < global_scoreteamred)
+                else if ((global_scoreteamred >= maxscore && global_scoreteamblue < maxscore) || global_scoreteamblue < global_scoreteamred)
                     global_gamestate = GAME_REDWIN;
                 else
                     global_gamestate = GAME_DRAWWIN;
+
+				// State why the game ended
+				if (GetCVar("dominatrix_timemax") != 0 && timeup)
+					global_gameend = END_TIME;
+				else
+					global_gameend = END_SCORE;
 
                 // Freeze all the players
                 SetPlayerProperty(1, 1, PROP_TOTALLYFROZEN);
                 SetPlayerProperty(1, 2, PROP_INVULNERABILITY);
 
 				// End the game after three seconds
-                delay(SECOND*3);
+                delay(SECOND*GetCVar("dominatrix_roundendtime"));
                 Exit_Normal(0);
             }
         }
@@ -435,6 +487,15 @@ Script "Dominatrix_HandleScore" (void)
 // Network serverside globals to clients
 Script "Dominatrix_NetworkGlobals" (void)
 {
+	/*
+		What is happening here?
+		Zandronum does not network global variables to clients, so as a result when you try to retrieve a global variable clientsided,
+		it always returns 0. My solution to fix that is to stick the values in a Server CVar, which allows us to send a myriad of data
+		(like strings). In most cases, ints/floats are used. When I need to transfer stuff that's in an array, however, I pack the data
+		into a string instead, where every new line of the string represents a new index of the array. This, of course, requires an
+		auxillary code to both convert the strings back to ints (AToI) and another to unpack the data.
+		I used this method in DoomWare and it works great. I should probably write a guide on this in the future...
+	*/
 	str cpinfo = "";
 
 	SetGlobalCVar("__clientsync_redscore", global_scoreteamred);
@@ -443,14 +504,14 @@ Script "Dominatrix_NetworkGlobals" (void)
 	SetGlobalCVar("__clientsync_cpcount", global_cpcount);
 	SetGlobalCVar("__clientsync_time", global_time);
 	SetGlobalCVar("__clientsync_announce", global_announcement);
+	SetGlobalCVar("__clientsync_gameend", global_gameend);
 
 	// Pack the control point info into a string
 	for (int i=0; i<MAXCONTROLPOINTS; i++)
 	{
-		int cptid = global_controlpoints[i][CPDATA_TID];
-		if (cptid != 0)
+		if (global_controlpoints[i][CPDATA_TID] != 0)
 		{
-			cpinfo = StrParam(s:cpinfo, d:GetActorX(cptid), s:" ", d:GetActorY(cptid), s:" ", d:GetActorZ(cptid));
+			cpinfo = StrParam(s:cpinfo, d:global_controlpoints[i][CPDATA_X], s:" ", d:global_controlpoints[i][CPDATA_Y], s:" ", d:global_controlpoints[i][CPDATA_Z]);
 			cpinfo = StrParam(s:cpinfo, s:" ", d:global_controlpoints[i][CPDATA_TEAM], s:" ", d:global_controlpoints[i][CPDATA_STATUS]);
 			cpinfo = StrParam(s:cpinfo, s:" ", d:global_controlpoints[i][CPDATA_CAPAMOUNT], c:'\n');
 		}
@@ -592,6 +653,9 @@ Script "Dominatrix_AddControlPoint" (int x, int y, int z)
     // Setup the altar
     ACS_NamedExecuteAlways("Dominatrix_ApplyTranslation", 0, global_controlpoints[index][CPDATA_TID], TRANSLATION_GREY);
     global_controlpoints[index][CPDATA_TEAM] = TEAM_NONE;
+	global_controlpoints[index][CPDATA_X] = x;
+	global_controlpoints[index][CPDATA_Y] = y;
+	global_controlpoints[index][CPDATA_Z] = z;
 }
 
 // Adds a control point for the blue team
@@ -622,6 +686,9 @@ Script "Dominatrix_AddControlPointBlue" (int x, int y, int z)
     ACS_NamedExecuteAlways("Dominatrix_ApplyTranslation", 0, global_controlpoints[index][CPDATA_TID], TRANSLATION_BLUE);
     global_controlpoints[index][CPDATA_CAPAMOUNT] = 100.0;
     global_controlpoints[index][CPDATA_TEAM] = TEAM_BLUE;
+	global_controlpoints[index][CPDATA_X] = x;
+	global_controlpoints[index][CPDATA_Y] = y;
+	global_controlpoints[index][CPDATA_Z] = z;
 }
 
 // Adds a control point for the red team
@@ -652,6 +719,9 @@ Script "Dominatrix_AddControlPointRed" (int x, int y, int z)
     ACS_NamedExecuteAlways("Dominatrix_ApplyTranslation", 0, global_controlpoints[index][CPDATA_TID], TRANSLATION_RED);
     global_controlpoints[index][CPDATA_CAPAMOUNT] = -100.0;
     global_controlpoints[index][CPDATA_TEAM] = TEAM_RED;
+	global_controlpoints[index][CPDATA_X] = x;
+	global_controlpoints[index][CPDATA_Y] = y;
+	global_controlpoints[index][CPDATA_Z] = z;
 }
 
 // Set the control point to the specified team
@@ -845,6 +915,9 @@ function void HudLoop(int plynum)
 	// Print the time
 	if (GetCVar("__clientsync_gamestate") == GAME_RUNNING && GetCVar("dominatrix_timemax") != 0)
 	{
+		int timeY = 0.1;
+		if (GetUserCVar(plynum, "dominatrix_showallcps") && GetCVar("__clientsync_cpcount") > 0)
+			timeY = ((24*ceil(FixedDiv(GetCVar("__clientsync_cpcount")<<16, CPPERLINEHUD<<16)))<<16)+0.1;
 		int time = GetCVar("__clientsync_time")+1;
 		int minutes = time/60;
 		int seconds = time%60;
@@ -857,7 +930,7 @@ function void HudLoop(int plynum)
 			timestr = StrParam(s:timestr, s:"0");
 		timestr = StrParam(s:timestr, d:seconds);
 
-		HudMessage(s:timestr; HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_HUDTIME, CR_WHITE, (scrW/2 << 16), 0.1, 1.0);
+		HudMessage(s:timestr; HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_HUDTIME, CR_WHITE, (scrW/2 << 16), timeY, 1.0);
 	}
 	else
 		HudMessage(s:""; HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_HUDTIME, CR_WHITE, (scrW/2 << 16), 0.1, 1.0);
@@ -875,14 +948,29 @@ function void HudLoop(int plynum)
 		HudMessage(s:"score\n", d:GetCVar("__clientsync_redscore"); HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_HUDREDS, CR_RED, (scrW << 16)+0.6, 0.1, 1.0);
 	}
 
-	// Print the winner
-	SetFont("BIGFONT");
-	if (GetCVar("__clientsync_gamestate") == GAME_BLUEWIN)
-		HudMessage(s:"Blue Wins!"; HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_HUDSTATE, CR_RED, (scrW/2 << 16), (scrH/2 << 16)-32.0, 1.0);
-	else if (GetCVar("__clientsync_gamestate") == GAME_REDWIN)
-		HudMessage(s:"Red Wins!"; HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_HUDSTATE, CR_RED, (scrW/2 << 16), (scrH/2 << 16)-32.0, 1.0);
-	else if (GetCVar("__clientsync_gamestate") == GAME_DRAWWIN)
-		HudMessage(s:"Draw game!"; HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_HUDSTATE, CR_RED, (scrW/2 << 16), (scrH/2 << 16)-32.0, 1.0);
+	// If the game ended
+	if (GetCVar("__clientsync_gameend") != END_NONE)
+	{
+		str gameover = "";
+
+		// State why the game ended
+		if (GetCVar("__clientsync_gameend") == END_TIME)
+			gameover = "Time up!\n";
+		else
+			gameover = "Score limit reached!\n";
+
+		// Attach the winner
+		if (GetCVar("__clientsync_gamestate") == GAME_BLUEWIN)
+			gameover = StrParam(s:gameover, s:"Blue Wins!");
+		else if (GetCVar("__clientsync_gamestate") == GAME_REDWIN)
+			gameover = StrParam(s:gameover, s:"Red Wins!");
+		else if (GetCVar("__clientsync_gamestate") == GAME_DRAWWIN)
+			gameover = StrParam(s:gameover, s:"Draw game!");
+
+		// Print the winner
+		SetFont("BIGFONT");
+		HudMessage(s:gameover; HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_HUDSTATE, CR_RED, (scrW/2 << 16)+0.4, (scrH/2 << 16)-32.0, 1.0);
+	}
 	else
 		HudMessage(s:""; HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_HUDSTATE, CR_RED, (scrW/2 << 16), (scrH/2 << 16), 1.0);
 }
@@ -946,7 +1034,7 @@ Argument 3 - The number of the CP
 Argument 4 - The screen width
 Argument 5 - The screen height
 -------------------------------------------------------------*/
-function void CPInfoDraw(int plynum, str cpdata, int cpCount, int scrW, int scrH)
+function void CPInfoDraw(int plynum, str cpdata, int cpNum, int scrW, int scrH)
 {
 	// HUD variables
 	int dist, angle, vang, pitch, x, y;
@@ -960,6 +1048,8 @@ function void CPInfoDraw(int plynum, str cpdata, int cpCount, int scrW, int scrH
 	str spr_back2 = -1;
 	str spr_col2  = -1;
 	str spr_info2 = -1;
+	int bobamouunt = 8.0;
+	int bobspeed = 2000;
 
 	// CPData variables
 	int cpx;
@@ -983,7 +1073,7 @@ function void CPInfoDraw(int plynum, str cpdata, int cpCount, int scrW, int scrH
 			else if (datanum == 1)
 				cpy = AToI(StrMid(cpdata, lastspace, i-lastspace));
 			else if (datanum == 2)
-				cpz = AToI(StrMid(cpdata, lastspace, i-lastspace));
+				cpz = AToI(StrMid(cpdata, lastspace, i-lastspace))+32.0+FixedMul(sin(Timer()*bobspeed), bobamouunt);
 			else if (datanum == 3)
 				cpteam = AToI(StrMid(cpdata, lastspace, i-lastspace));
 			else if (datanum == 4)
@@ -1017,6 +1107,10 @@ function void CPInfoDraw(int plynum, str cpdata, int cpCount, int scrW, int scrH
 		int num;
 		if (cpteam == TEAM_NONE)
 			num = abs(cphealth/20);
+		else if (cpteam == GetPlayerInfo(plynum, PLAYERINFO_TEAM) && (cphealth == 100 || cphealth == -100))
+			num = 5;
+		else if (cpteam == GetPlayerInfo(plynum, PLAYERINFO_TEAM))
+			num = 10-ceil(absf(FixedDiv(cphealth<<16, 25.0)));
 		else
 			num = 10-ceil(absf(FixedDiv(cphealth<<16, 20.0)));
 
@@ -1091,32 +1185,36 @@ function void CPInfoDraw(int plynum, str cpdata, int cpCount, int scrW, int scrH
 					else
 						spr_back = "CPWHGREY";
 					SetFont(spr_back);
-					HudMessage(s:"A"; HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_CPBACK+cpCount, CR_WHITE, (x << 16), (y << 16), 1.0);
+					HudMessage(s:"A"; HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_CPBACK+cpNum, CR_WHITE, (x << 16), (y << 16), 1.0);
 
 					// Draw the color
 					SetFont(spr_col);
 					if (spr_col == -1)
-						HudMessage(s:""; HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_CPCOLR+cpCount, CR_WHITE, (x << 16), (y << 16), 1.0);
+						HudMessage(s:""; HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_CPCOLR+cpNum, CR_WHITE, (x << 16), (y << 16), 1.0);
 					else
-						HudMessage(s:"A"; HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_CPCOLR+cpCount, CR_WHITE, (x << 16), (y << 16), 1.0);
+						HudMessage(s:"A"; HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_CPCOLR+cpNum, CR_WHITE, (x << 16), (y << 16), 1.0);
 
 					// Draw extra CP status info
 					SetFont(spr_info);
 					if (cpstatus != CPSTATUS_IDLE && (cpstatus == CPSTATUS_BLUECAP || cpstatus == CPSTATUS_REDCAP))
-						HudMessage(s:"A"; HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_CPINFO+cpCount, CR_WHITE, (x << 16), (y << 16), 1.0);
+						HudMessage(s:"A"; HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_CPINFO+cpNum, CR_WHITE, (x << 16), (y << 16), 1.0);
 					else
-						HudMessage(s:""; HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_CPINFO+cpCount, CR_WHITE, (x << 16), (y << 16), 1.0);
+						HudMessage(s:""; HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_CPINFO+cpNum, CR_WHITE, (x << 16), (y << 16), 1.0);
 				}
 			}
 		}
 	}
 
+	// Draw the CP's on the top of the screen
 	if (GetUserCVar(plynum, "dominatrix_showallcps"))
 	{
-		int yCP = 0.1;
-		if (GetCVar("__clientsync_gamestate") == GAME_RUNNING && GetCVar("dominatrix_timemax") != 0)
-			yCP = 12.1;
-		int maxW = 24*(GetCVar("__clientsync_cpcount")-1);
+		// Calculate the X and Y pos of the CP icon
+		int maxW;
+		int cpHUDY = FixedMul(24.0, floor(FixedDiv(cpNum<<16, CPPERLINEHUD<<16))<<16)+1.1;
+		if (floor(FixedDiv(cpNum<<16, CPPERLINEHUD<<16)) == floor(FixedDiv(GetCVar("__clientsync_cpcount")<<16, CPPERLINEHUD<<16)))
+			maxW = 24*((GetCVar("__clientsync_cpcount")%CPPERLINEHUD)-1);
+		else
+			maxW = 24*(CPPERLINEHUD-1);
 		SetHudSize(scrW, scrH, false);
 
 		// Draw the background
@@ -1125,21 +1223,21 @@ function void CPInfoDraw(int plynum, str cpdata, int cpCount, int scrW, int scrH
 		else
 			spr_back2 = "SMALGREY";
 		SetFont(spr_back2);
-		HudMessage(s:"A"; HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_CPBACKSM+cpCount, CR_WHITE, (scrW/2-maxW/2+cpCount*24 << 16), yCP, 1.0);
+		HudMessage(s:"A"; HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_CPBACKSM+cpNum, CR_WHITE, (scrW/2-maxW/2+(cpNum%CPPERLINEHUD)*24) << 16, cpHUDY, 1.0);
 
 		// Draw the color
 		SetFont(spr_col2);
 		if (spr_col2 == -1)
-			HudMessage(s:""; HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_CPCOLRSM+cpCount, CR_WHITE, 0.0, 0.0, 1.0);
+			HudMessage(s:""; HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_CPCOLRSM+cpNum, CR_WHITE, 0.0, 0.0, 1.0);
 		else
-			HudMessage(s:"A"; HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_CPCOLRSM+cpCount, CR_WHITE, (scrW/2-maxW/2+cpCount*24 << 16), yCP, 1.0);
+			HudMessage(s:"A"; HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_CPCOLRSM+cpNum, CR_WHITE, (scrW/2-maxW/2+(cpNum%CPPERLINEHUD)*24) << 16, cpHUDY, 1.0);
 
 		// Draw the extra info
 		SetFont(spr_info2);
 		if (spr_info2 == -1)
-			HudMessage(s:""; HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_CPINFOSM+cpCount, CR_WHITE, 0.0, 0.0, 1.0);
+			HudMessage(s:""; HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_CPINFOSM+cpNum, CR_WHITE, 0.0, 0.1, 1.0);
 		else
-			HudMessage(s:"A"; HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_CPINFOSM+cpCount, CR_WHITE, (scrW/2-maxW/2+cpCount*24 << 16), yCP, 1.0);
+			HudMessage(s:"A"; HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_CPINFOSM+cpNum, CR_WHITE, (scrW/2-maxW/2+(cpNum%CPPERLINEHUD)*24) << 16, cpHUDY, 1.0);
 	}
 }
 
@@ -1254,7 +1352,6 @@ Rounds a fixed point number up (only works for positive values)
 Argument 1 - A fixed number
 Returns - A whole integer
 -------------------------------------------------------------*/
-
 function int ceil(int fixedNumber)
 {
 	return ((fixedNumber + 65535) & 0xFFFF0000) >> 16;
