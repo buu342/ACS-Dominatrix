@@ -48,6 +48,7 @@ dominatrix_scorelimitperplayer = 0; // Increase the max score by this number mul
 dominatrix_timelimitpercp      = 0; // Increase the max time by this number multiplied by the number of CPs.
 dominatrix_timelimitperplayer  = 0; // Increase the max time by this number multiplied by the number of players.
 ```
+<br/>
 
 
 ### Clientside configuration
@@ -58,6 +59,7 @@ dominatrix_showallcps    = true; // Show all CP's below the timelimit
 dominatrix_hudscale      = true; // Scale the HUD
 dominatrix_hudwidescreen = true; // Use a widescreen HUD
 ```
+<br/>
 
 
 ### Changelog
