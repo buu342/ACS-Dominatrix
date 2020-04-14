@@ -1,4 +1,5 @@
-# Dominatrix
+![](https://i.imgur.com/kxijgwR.gif)![](https://i.imgur.com/mancHEJ.png)
+---
 A highly configurable domination gamemode replacement for Zandronum, ZDoom, and ZDaemon. ZDaemon compatiblity is not yet finished, as the DECORATE assets need to be converted to DeHackEd.
 
 This WAD requested by the MDF community.<br/><br/>
