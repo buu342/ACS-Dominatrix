@@ -24,7 +24,7 @@ Examples are provided in the "Injection WADs" folder within this repository.<br/
   **1)** Include the latest version of the Dominatrix WAD in your server's wad list, as well as the map pack you want to use and the injection script to place CP's in said map pack.<br/>
   **2)** Ensure the server is running "Team Deathmatch" as the selected gamemode.<br/>
   **3)** Ensure the default gamemode's score limit and time limit are both set to 0 to prevent conflicts with Dominatrix. I would also recommend disabling the announcer as this gamemode comes with its own. <br/>
-  **4)** If using ZDaemon, include Dominatrix.cfg in your server so that all Dominatrix related CVars are set. Also, be aware that in ZDaemon, CVars need to have 1/0 as opposed to true/false, and that you **cannot** use decimal numbers!  
+  **4)** If using ZDaemon, include Dominatrix.cfg (or call it in the console via `exec dominatrix.cfg`) in your server so that all Dominatrix related CVars are set. Also, be aware that in ZDaemon, CVars need to have 1/0 as opposed to true/false, and that you **cannot** use decimal numbers!  
 <br/><br/>
 
 ### How to compile the Dominatrix ACS source
