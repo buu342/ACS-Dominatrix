@@ -8,12 +8,13 @@
 ===================================================================================================*/
 
 #define DUMMY ""        // Needed to prevent text bugs from ocurring
-#define VERSION "1.1"
+#define VERSION "1.2"
 #define SECOND 35
 
-#define MAXPLAYERS 64       // No need to change unless Zandronum decides to use 128 bits
+#define MAXPLAYERS 64       // No need to change
 #define MAXCONTROLPOINTS 10 // Maximum number of Control points
 #define CPPERLINEHUD 10		// Maximum number of CP's per line in your HUD
+#define CAPBELOW_HEIGHT 8.0 // Cap below (CVar) tolerance height
 
 // Macros for Message ID's
 #define MSGID_CONSOLE  -1
@@ -21,12 +22,15 @@
 #define MSGID_HUDREDS  6
 #define MSGID_HUDBLUES 7
 #define MSGID_HUDTIME  8
-#define MSGID_CPINFO   20
-#define MSGID_CPCOLR   20+MAXCONTROLPOINTS+1
-#define MSGID_CPBACK   20+MAXCONTROLPOINTS*2+1
-#define MSGID_CPINFOSM 20+MAXCONTROLPOINTS*3+1
-#define MSGID_CPCOLRSM 20+MAXCONTROLPOINTS*4+1
-#define MSGID_CPBACKSM 20+MAXCONTROLPOINTS*5+1
+#define MSGID_HUDTIME2 9
+#define MSGID_CPCAP1   10
+#define MSGID_CPCAP2   11
+#define MSGID_CPINFO   21
+#define MSGID_CPCOLR   21+MAXCONTROLPOINTS
+#define MSGID_CPBACK   21+MAXCONTROLPOINTS*2
+#define MSGID_CPINFOSM 21+MAXCONTROLPOINTS*3
+#define MSGID_CPCOLRSM 21+MAXCONTROLPOINTS*4
+#define MSGID_CPBACKSM 21+MAXCONTROLPOINTS*5
 
 // Macros for translations
 #define TRANSLATION_GREY  1
@@ -43,6 +47,8 @@
 // Macros for Thing ID's
 #define TID_PLAYER    1337
 #define TID_CP        2337
+#define TID_CPEYE     TID_CP+MAXCONTROLPOINTS
+#define TID_DELETE    3337
 
 // Macros for CP data
 #define CPDATA_TID       0
@@ -68,22 +74,65 @@
 #define CPSTATUS_STUCKRED  3
 #define CPSTATUS_STUCKBLUE 4
 
-// Macros for announcer sound
-#define ANNOUNCE_EMPTY    0
-#define ANNOUNCE_BLUEGREY 1
-#define ANNOUNCE_REDGREY  2
-#define ANNOUNCE_BLUE     3
-#define ANNOUNCE_RED      4
+// Macros for announcer sound (negative means team specific)
+#define ANNOUNCE_EMPTY     0
+#define ANNOUNCE_BLUEGREY  -1
+#define ANNOUNCE_REDGREY   -2
+#define ANNOUNCE_BLUE      3
+#define ANNOUNCE_RED       4
+#define ANNOUNCE_REDSCORE  5
+#define ANNOUNCE_BLUESCORE 6
+#define ANNOUNCE_BLUEWIN   7
+#define ANNOUNCE_REDWIN    8
+#define ANNOUNCE_DRAWGAME  9
+#define ANNOUNCE_50POINTS  10
+#define ANNOUNCE_3POINTS   11
+#define ANNOUNCE_2POINTS   12
+#define ANNOUNCE_1POINT    13
+#define ANNOUNCE_1MINUTE   14
+#define ANNOUNCE_5MINUTES  15
 
 // Macros for why the game ended
 #define END_NONE  0
 #define END_SCORE 1
 #define END_TIME  2
 
+// Dominatrix SpawnID's
+#define T_CPGREY     213
+#define T_CPBLUE     214
+#define T_CPRED      215
+#define T_CPALTAR    216
+#define T_CPEYE      217
+#define T_CPEYESPIN1 218
+#define T_CPEYESPIN2 219
+
+// Animations
+#define ANIM_BLUE2GREY 0
+#define ANIM_RED2GREY  1
+#define ANIM_GREY2BLUE 2
+#define ANIM_GREY2RED  3
+
+// Font definitions
+#define FONT_FLASHSPEED    6
+#define BFONT_STARTCHAR    32
+#define BFONT_GREYBACK     BFONT_STARTCHAR+43
+#define BFONT_YELLOWBACK   BFONT_GREYBACK+1
+#define SFONT_STARTCHAR    32
+#define SFONT_GREYBACK     SFONT_STARTCHAR+10
+#define SFONT_YELLOWBACK   SFONT_GREYBACK+1
+#define SFONT_TEAMCAP      SFONT_YELLOWBACK+1
+#define SFONT_WARNING      SFONT_TEAMCAP+1
+#define SFONT_MARKERSTART  SFONT_WARNING+1
+#define SFONT_MARKERBACK   SFONT_WARNING+6
+#define SFONT_MARKERYELLOW SFONT_MARKERSTART+10
+#define SFONT_MARKERTEAM   SFONT_MARKERYELLOW+1
+#define SFONT_MARKERWARN   SFONT_MARKERTEAM+1
+
 
 /*===================================================================================================
                                           Global Variables
 ===================================================================================================*/
+
 bool global_gameinitialized;
 int global_controlpoints[MAXCONTROLPOINTS][8];
 int global_players[MAXPLAYERS];
@@ -97,7 +146,10 @@ int global_gameend;
 int global_scoreteamblue;
 int global_scoreteamred;
 int global_time;
+int global_ddomtime;
 int global_announcement;
+bool global_cpslotmutex;
+bool global_zdaemoncompat;
 
 
 /*===================================================================================================
@@ -107,6 +159,7 @@ int global_announcement;
 // Initialize Dominatrix
 Script "Dominatrix_Initialize" OPEN
 {
+	global_cpslotmutex = true;
     global_gameinitialized = true;
     global_cpcount = 0;
     global_cpcountblue = 0;
@@ -114,8 +167,10 @@ Script "Dominatrix_Initialize" OPEN
     global_scoreteamred = 0;
     global_scoreteamblue = 0;
 	global_time = 0;
+	global_ddomtime = 0;
 	global_announcement = ANNOUNCE_EMPTY;
 	global_gameend = END_NONE;
+	global_zdaemoncompat = false;
 
     global_gamestate = GAME_RUNNING;
 
@@ -131,23 +186,20 @@ Script "Dominatrix_Initialize" OPEN
 }
 
 // Set player TID's when entering the game
-Script "Dominatrix_PlayerEnter" Enter
+Script "Dominatrix_PlayerEnter" ENTER
 {
-    ACS_NamedExecuteAlways("Dominatrix_Advertise", 0);
     Thing_ChangeTID(0, TID_PLAYER+PlayerNumber());
     global_players[PlayerNumber()] = TID_PLAYER+PlayerNumber();
 
-	// Create the HUD
-	if (!StrICmp(GetCVarString("dominatrix_compatibility"), "zdaemon"))
-		Client_NamedExecuteAlways(PlayerNumber(), "Dominatrix_HUD_ZDaemon", 0);
-	else if (!StrICmp(GetCVarString("dominatrix_compatibility"), "zdoom"))
+	// Create the HUD (Zandronum's HUD auto starts)
+	if (IsCompatibilityMode("zdaemon"))
+		ACS_NamedExecuteAlways("Dominatrix_HUD_ZDaemon", 0);
+	else if (IsCompatibilityMode("zdoom"))
 		ACS_NamedExecuteAlways("Dominatrix_HUD_ZDoom", 0);
-	else
-		ACS_NamedExecuteAlways("Dominatrix_HUD_Zandronum", 0);
 }
 
-// Let people know this server is using Dominatrix
-Script "Dominatrix_Advertise" (void)
+// Let people know this server is using Dominatrix (Zandronum Only)
+Script "Dominatrix_Advertise" OPEN CLIENTSIDE
 {
     if (GetUserCVar(PlayerNumber(), "_dominatrix_advertise"))
     {
@@ -156,6 +208,7 @@ Script "Dominatrix_Advertise" (void)
             s:"           Version ", s:VERSION,
             s:"\n    Created by \cqB\csu\cdu\cq3\cs4\cd2\c- for MDF")
         );
+		LocalAmbientSound(StrParam(s:"Dominatrix/Announcer/Welcome", d:random(1, 3)), 127);
     }
 }
 
@@ -164,16 +217,18 @@ Script "Dominatrix_PlayerSpawn" RESPAWN
 {
     Thing_ChangeTID(0, TID_PLAYER+PlayerNumber());
     global_players[PlayerNumber()] = TID_PLAYER+PlayerNumber();
+	if (IsCompatibilityMode("zdaemon"))
+		ACS_NamedExecuteAlways("Dominatrix_HUD_ZDaemon", 0);
 }
 
 // Remove player TID's when dying and handle frag scoring
 Script "Dominatrix_PlayerDie" DEATH
 {
-    SetActorInventory(TID_PLAYER+PlayerNumber(), "CPColorBlue", 0);
-    SetActorInventory(TID_PLAYER+PlayerNumber(), "CPColorRed", 0);
-    Thing_ChangeTID(TID_PLAYER+PlayerNumber(), 0);
+	// Reset the player's TID
+    //Thing_ChangeTID(TID_PLAYER+PlayerNumber(), 0);
     global_players[PlayerNumber()] = 0;
 
+	// Give the other team points
     if (GetCVar("dominatrix_scorefrag"))
     {
         int plyteam = GetPlayerInfo(PlayerNumber(), PLAYERINFO_TEAM);
@@ -189,7 +244,10 @@ Script "Dominatrix_PlayerLeave" (int plynum) DISCONNECT
 {
     Thing_ChangeTID(TID_PLAYER+plynum, 0);
     global_players[plynum] = 0;
-    ACS_NamedTerminate("Dominatrix_HandleAnnouncer", 0);
+
+	// Zandronum kills clientside ACS upon moving to spectator. We need this to reenable the HUD...
+	if (IsCompatibilityMode("zandronum") && PlayerIsSpectator(plynum))
+		ACS_NamedExecuteAlways("Dominatrix_HUD_Zandronum", 0);
 }
 
 // Main gamemode logic thread
@@ -204,201 +262,170 @@ Script "Dominatrix_Logic" (void)
 bool temp_playercappingid[MAXPLAYERS];
 Script "Dominatrix_HandleControlPoints" (void)
 {
-	int i;
-    int plytid;
-    int plyteam;
-	global_announcement = ANNOUNCE_EMPTY;
-
-	// Find control points that haven't been setup yet (ZDaemon)
-	if (!StrICmp(GetCVarString("dominatrix_compatibility"), "zdaemon"))
+	int lastcpHealth = GetCVar("dominatrix_caphealth");
+	while (true)
 	{
-		// Todo
-	}
+		int i;
+		int plytid;
+		int plyteam;
 
-	// If the game is over, don't do any more control point handling
-	if (global_gamestate != GAME_WARMUP && global_gamestate != GAME_RUNNING)
-	{
-		// Set all CPs as idle
-		for (i=0; i<MAXCONTROLPOINTS; i++)
+		// If the game is over, don't do any more control point handling
+		if (global_gamestate != GAME_WARMUP && global_gamestate != GAME_RUNNING)
 		{
+			// Set all CPs as idle
+			for (i=0; i<MAXCONTROLPOINTS; i++)
+			{
+				// If this control point isn't registered, move to the next one
+				if (global_controlpoints[i][CPDATA_TID] == 0)
+					continue;
+				global_controlpoints[i][CPDATA_STATUS] = CPSTATUS_IDLE;
+			}
+			terminate;
+		}
+
+		// Cycle through all control points
+		for (int j=0; j<MAXCONTROLPOINTS; j++)
+		{
+			int bluecaps = 0;
+			int redcaps = 0;
+
 			// If this control point isn't registered, move to the next one
-			if (global_controlpoints[i][CPDATA_TID] == 0)
+			if (global_controlpoints[j][CPDATA_TID] == 0)
 				continue;
-			global_controlpoints[i][CPDATA_STATUS] = CPSTATUS_IDLE;
+
+			// If there has been a change to the maximum health of a CP, adapt
+			if (lastcpHealth != GetCVar("dominatrix_caphealth"))
+			{
+				int ratio = FixedDiv(GetCVar("dominatrix_caphealth")<<16, lastcpHealth<<16);
+				global_controlpoints[j][CPDATA_CAPAMOUNT] = FixedMul(global_controlpoints[j][CPDATA_CAPAMOUNT]<<16, ratio)>>16;
+			}
+
+			// Initialize the CP as idle
+			global_controlpoints[j][CPDATA_STATUS] = CPSTATUS_IDLE;
+
+			// Cycle through all players to see which teams are capturing this point
+			for (i=0; i<MAXPLAYERS; i++)
+			{
+				plytid = global_players[i];
+				plyteam = GetPlayerInfo(plytid-TID_PLAYER, PLAYERINFO_TEAM);
+
+				// If the player doesn't exist, skip him
+				if (plytid == 0)
+				{
+					temp_playercappingid[i] = -1;
+					continue;
+				}
+
+				// Prevent capping from below
+				if (!GetCVar("dominatrix_capbelow") && GetActorZ(plytid)+CAPBELOW_HEIGHT < global_controlpoints[j][CPDATA_Z])
+					continue;
+
+				// If a player is near a control point, mark his team as trying to capture it
+				if (distance(plytid, global_controlpoints[j][CPDATA_TID]) < GetCVar("dominatrix_capdistance"))
+				{
+					if (plyteam == TEAM_BLUE)
+						bluecaps++;
+					else if (plyteam == TEAM_RED)
+						redcaps++;
+					temp_playercappingid[i] = j;
+				}
+				else if (temp_playercappingid[i] == j)
+					temp_playercappingid[i] = -1;
+			}
+
+			// Change the capture amount if only one team is capturing
+			if (bluecaps > 0 && redcaps == 0)
+			{
+				// Ignore if the control point is already captured by the blue team
+				if (!GetCVar("dominatrix_capteamregen") && global_controlpoints[j][CPDATA_TEAM] == TEAM_BLUE)
+					continue;
+
+				// Ignore if the control point is at max hp
+				if (global_controlpoints[j][CPDATA_CAPAMOUNT] >= GetCVar("dominatrix_caphealth"))
+				{
+					global_controlpoints[j][CPDATA_CAPAMOUNT] = GetCVar("dominatrix_caphealth");
+					continue;
+				}
+
+				// Add blue's capture to the capture amount
+				if (GetCVar("dominatrix_capmultiple"))
+					global_controlpoints[j][CPDATA_CAPAMOUNT] += bluecaps;
+				else
+					global_controlpoints[j][CPDATA_CAPAMOUNT] += 1;
+
+				// Change the capture point's color
+				if (global_controlpoints[j][CPDATA_TEAM] == TEAM_RED && global_controlpoints[j][CPDATA_CAPAMOUNT] > 0)
+					ACS_NamedExecuteAlways("Dominatrix_SetControlPointTeam", 0, global_controlpoints[j][CPDATA_TID], TEAM_NONE);
+				else if (global_controlpoints[j][CPDATA_CAPAMOUNT] >= GetCVar("dominatrix_caphealth"))
+					ACS_NamedExecuteAlways("Dominatrix_SetControlPointTeam", 0, global_controlpoints[j][CPDATA_TID], TEAM_BLUE);
+
+				// Mark the CP as being captured by the blue team
+				global_controlpoints[j][CPDATA_STATUS] = CPSTATUS_BLUECAP;
+			}
+			else if (redcaps > 0 && bluecaps == 0)
+			{
+				// Ignore if the control point is already captured by the red team
+				if (!GetCVar("dominatrix_capteamregen") && global_controlpoints[j][CPDATA_TEAM] == TEAM_RED)
+					continue;
+
+				// Ignore if the control point is at max hp
+				if (global_controlpoints[j][CPDATA_CAPAMOUNT] <= -GetCVar("dominatrix_caphealth"))
+				{
+					global_controlpoints[j][CPDATA_CAPAMOUNT] = -GetCVar("dominatrix_caphealth");
+					continue;
+				}
+
+				// Add red's capture to the capture amount
+				if (GetCVar("dominatrix_capmultiple"))
+					global_controlpoints[j][CPDATA_CAPAMOUNT] -= redcaps;
+				else
+					global_controlpoints[j][CPDATA_CAPAMOUNT] -= 1;
+
+				// Change the capture point's color
+				if (global_controlpoints[j][CPDATA_TEAM] == TEAM_BLUE && global_controlpoints[j][CPDATA_CAPAMOUNT] < 0)
+					ACS_NamedExecuteAlways("Dominatrix_SetControlPointTeam", 0, global_controlpoints[j][CPDATA_TID], TEAM_NONE);
+				else if (global_controlpoints[j][CPDATA_CAPAMOUNT] <= -GetCVar("dominatrix_caphealth"))
+					ACS_NamedExecuteAlways("Dominatrix_SetControlPointTeam", 0, global_controlpoints[j][CPDATA_TID], TEAM_RED);
+
+				// Mark the CP as being captured by the red team
+				global_controlpoints[j][CPDATA_STATUS] = CPSTATUS_REDCAP;
+			}
+			else if (bluecaps == 0 && redcaps == 0)
+			{
+				// Handle control point health regen
+				int capregentime = GetCVar("dominatrix_capregentime");
+				int capregenseconds = FixedMul(capregentime, SECOND<<16)>>16;
+				if (IsCompatibilityMode("zdaemon"))
+					capregenseconds = capregentime*SECOND;
+				if (capregentime != 0 && global_controlpoints[j][CPDATA_TEAM] != TEAM_NONE)
+				{
+					if (abs(global_controlpoints[j][CPDATA_CAPAMOUNT]) != GetCVar("dominatrix_caphealth"))
+					{
+						if (global_controlpoints[j][CPDATA_LASTREGEN] == 0)
+							global_controlpoints[j][CPDATA_LASTREGEN] = Timer()+capregenseconds;
+						if (global_controlpoints[j][CPDATA_LASTREGEN] < Timer())
+						{
+							global_controlpoints[j][CPDATA_LASTREGEN] = Timer()+capregenseconds;
+							if (global_controlpoints[j][CPDATA_TEAM] == TEAM_BLUE)
+								global_controlpoints[j][CPDATA_CAPAMOUNT] += 1;
+							else
+								global_controlpoints[j][CPDATA_CAPAMOUNT] -= 1;
+						}
+					}
+				}
+			}
+			else if (bluecaps > 0 && redcaps > 0)
+			{
+				if (global_controlpoints[j][CPDATA_CAPAMOUNT] > 0)
+					global_controlpoints[j][CPDATA_STATUS] = CPSTATUS_STUCKBLUE;
+				else
+					global_controlpoints[j][CPDATA_STATUS] = CPSTATUS_STUCKRED;
+			}
 		}
-		terminate;
+
+		lastcpHealth = GetCVar("dominatrix_caphealth");
+		delay(1);
 	}
-
-    // Cycle through all control points
-    for (int j=0; j<MAXCONTROLPOINTS; j++)
-    {
-        int bluecaps = 0;
-        int redcaps = 0;
-
-        // If this control point isn't registered, move to the next one
-        if (global_controlpoints[j][CPDATA_TID] == 0)
-            continue;
-
-		// Initialize the CP as idle
-		global_controlpoints[j][CPDATA_STATUS] = CPSTATUS_IDLE;
-
-        // Cycle through all players to see which teams are capturing this point
-        for (i=0; i<MAXPLAYERS; i++)
-        {
-            plytid = global_players[i];
-            plyteam = GetPlayerInfo(plytid-TID_PLAYER, PLAYERINFO_TEAM);
-
-            // If the player doesn't exist, skip him
-            if (plytid == 0)
-            {
-                temp_playercappingid[i] = -1;
-                continue;
-            }
-
-            // If a player is near a control point, mark his team as trying to capture it
-            if (distance(plytid, global_controlpoints[j][CPDATA_TID]) < GetCVar("dominatrix_capdistance"))
-            {
-                if (plyteam == TEAM_BLUE)
-                    bluecaps++;
-                else if (plyteam == TEAM_RED)
-                    redcaps++;
-                temp_playercappingid[i] = j;
-            }
-            else if (temp_playercappingid[i] == j)
-                temp_playercappingid[i] = -1;
-        }
-
-        // Change the capture amount if only one team is capturing
-        if (bluecaps > 0 && redcaps == 0)
-        {
-            // Ignore if the control point is already captured by the blue team
-            if (!GetCVar("dominatrix_capteamregen") && global_controlpoints[j][CPDATA_TEAM] == TEAM_BLUE)
-                continue;
-
-            // Ignore if the control point is at max hp
-            if (global_controlpoints[j][CPDATA_CAPAMOUNT] >= 100.0)
-			{
-				global_controlpoints[j][CPDATA_CAPAMOUNT] = 100.0;
-                continue;
-			}
-
-            // Add blue's capture to the capture amount
-            if (GetCVar("dominatrix_capmultiple"))
-                global_controlpoints[j][CPDATA_CAPAMOUNT] += GetCVar("dominatrix_capspeed")*bluecaps + 0.0;
-            else
-                global_controlpoints[j][CPDATA_CAPAMOUNT] += GetCVar("dominatrix_capspeed") + 0.0;
-
-            // Change the capture point's color
-            if (global_controlpoints[j][CPDATA_TEAM] == TEAM_RED && global_controlpoints[j][CPDATA_CAPAMOUNT] > 0.0)
-                ACS_NamedExecuteAlways("Dominatrix_SetControlPointTeam", 0, global_controlpoints[j][CPDATA_TID], TEAM_NONE);
-            else if (global_controlpoints[j][CPDATA_CAPAMOUNT] >= 100.0)
-                ACS_NamedExecuteAlways("Dominatrix_SetControlPointTeam", 0, global_controlpoints[j][CPDATA_TID], TEAM_BLUE);
-
-			// Mark the CP as being captured by the blue team
-			global_controlpoints[j][CPDATA_STATUS] = CPSTATUS_BLUECAP;
-        }
-        else if (redcaps > 0 && bluecaps == 0)
-        {
-            // Ignore if the control point is already captured by the red team
-            if (!GetCVar("dominatrix_capteamregen") && global_controlpoints[j][CPDATA_TEAM] == TEAM_RED)
-                continue;
-
-            // Ignore if the control point is at max hp
-            if (global_controlpoints[j][CPDATA_CAPAMOUNT] <= -100.0)
-			{
-				global_controlpoints[j][CPDATA_CAPAMOUNT] = -100.0;
-                continue;
-			}
-
-            // Add red's capture to the capture amount
-            if (GetCVar("dominatrix_capmultiple"))
-                global_controlpoints[j][CPDATA_CAPAMOUNT] -= GetCVar("dominatrix_capspeed")*redcaps + 0.0;
-            else
-                global_controlpoints[j][CPDATA_CAPAMOUNT] -= GetCVar("dominatrix_capspeed") + 0.0;
-
-            // Change the capture point's color
-            if (global_controlpoints[j][CPDATA_TEAM] == TEAM_BLUE && global_controlpoints[j][CPDATA_CAPAMOUNT] < 0.0)
-                ACS_NamedExecuteAlways("Dominatrix_SetControlPointTeam", 0, global_controlpoints[j][CPDATA_TID], TEAM_NONE);
-            else if (global_controlpoints[j][CPDATA_CAPAMOUNT] <= -100.0)
-                ACS_NamedExecuteAlways("Dominatrix_SetControlPointTeam", 0, global_controlpoints[j][CPDATA_TID], TEAM_RED);
-
-			// Mark the CP as being captured by the red team
-			global_controlpoints[j][CPDATA_STATUS] = CPSTATUS_REDCAP;
-        }
-        else if (bluecaps == 0 && redcaps == 0)
-        {
-            // Handle control point health regen
-            if (GetCVar("dominatrix_capregentime") != 0 && global_controlpoints[j][CPDATA_TEAM] != TEAM_NONE)
-            {
-                if (global_controlpoints[j][CPDATA_CAPAMOUNT] != -100.0 && global_controlpoints[j][CPDATA_CAPAMOUNT] != 100.0)
-                {
-                    if (global_controlpoints[j][CPDATA_LASTREGEN] == 0)
-                        global_controlpoints[j][CPDATA_LASTREGEN] = Timer()+SECOND*GetCVar("dominatrix_capregentime");
-                    if (global_controlpoints[j][CPDATA_LASTREGEN] < Timer())
-                    {
-                        global_controlpoints[j][CPDATA_LASTREGEN] = Timer()+SECOND*GetCVar("dominatrix_capregentime");
-                        if (global_controlpoints[j][CPDATA_TEAM] == TEAM_BLUE)
-                            global_controlpoints[j][CPDATA_CAPAMOUNT] += 1.0;
-                        else
-                            global_controlpoints[j][CPDATA_CAPAMOUNT] -= 1.0;
-                    }
-                }
-            }
-        }
-		else if (bluecaps > 0 && redcaps > 0)
-		{
-			if (global_controlpoints[j][CPDATA_CAPAMOUNT] > 0.0)
-				global_controlpoints[j][CPDATA_STATUS] = CPSTATUS_STUCKBLUE;
-			else
-				global_controlpoints[j][CPDATA_STATUS] = CPSTATUS_STUCKRED;
-		}
-    }
-
-    // Cycle through all players one last time to do HUD stuff
-    for (i=0; i<MAXPLAYERS; i++)
-    {
-        plytid = global_players[i];
-
-        // If the player isn't in the game, skip him
-        if (plytid == 0)
-            continue;
-
-        // If the player is mid capture, show the hud
-        plyteam = GetPlayerInfo(plytid-TID_PLAYER, PLAYERINFO_TEAM);
-        int cpid = temp_playercappingid[i];
-        int cpteam = global_controlpoints[cpid][CPDATA_TEAM];
-        int cpamount = global_controlpoints[cpid][CPDATA_CAPAMOUNT];
-        bool capteamregen = GetCVar("dominatrix_capteamregen");
-        if (cpid != -1 && (!capteamregen && plyteam != cpteam) || (capteamregen && cpamount != 100.0 && cpamount != -100.0))
-        {
-            int capamount = floor(global_controlpoints[cpid][CPDATA_CAPAMOUNT]);
-
-            // Draw the capture HUD
-            if (capamount < 0)
-            {
-                SetActorInventory(plytid, "CPColorRed", -capamount);
-                SetActorInventory(plytid, "CPColorBlue", 0);
-            }
-            else
-            {
-                SetActorInventory(plytid, "CPColorBlue", capamount);
-                SetActorInventory(plytid, "CPColorRed", 0);
-            }
-
-			if (global_controlpoints[cpid][CPDATA_STATUS] == CPSTATUS_STUCKBLUE || global_controlpoints[cpid][CPDATA_STATUS] == CPSTATUS_STUCKRED)
-				SetActorInventory(plytid, "WarnItem", 1);
-			else
-				SetActorInventory(plytid, "WarnItem", 0);
-        }
-        else
-        {
-            SetActorInventory(plytid, "CPColorBlue", 0);
-            SetActorInventory(plytid, "CPColorRed", 0);
-        }
-    }
-
-    delay(1);
-    restart;
 }
 
 // Handle team score
@@ -410,10 +437,18 @@ Script "Dominatrix_HandleScore" (void)
 	int dynamicTimeExtra = GetCVar("dominatrix_timelimitpercp")*global_cpcount + GetCVar("dominatrix_timelimitperplayer")*PlayerCount();
     int timecur = Timer();
     int timetoscore = timecur+((FixedMul(SECOND<<16, GetCVar("dominatrix_scoretime")))>>16);
+	if (IsCompatibilityMode("zdaemon"))
+		timetoscore = timecur+SECOND*GetCVar("dominatrix_scoretime");
+	if (GetCVar("dominatrix_ddommode"))
+		timetoscore = 0;
     int timewarmup = timecur + GetCVar("dominatrix_timewarmup")*SECOND;
     int timetoend = timewarmup;
     if (global_gamestate == GAME_RUNNING)
         timetoend = timecur+(GetCVar("dominatrix_timemax")+dynamicTimeExtra)*SECOND;
+	bool announced50P = false;
+	bool announced3P = false;
+	bool announced2P = false;
+	bool announced1P = false;
 
 	// Don't touch the game logic if no one's playing currently
 	if (PlayerCount() == 0)
@@ -428,11 +463,48 @@ Script "Dominatrix_HandleScore" (void)
         timecur = Timer();
 
         // Add score after some time
-        if (GetCVar("dominatrix_scoretime") != 0.0 && timetoscore < timecur)
+        if ((GetCVar("dominatrix_ddommode") || GetCVar("dominatrix_scoretime") != 0) && timetoscore < timecur)
         {
-            global_scoreteamblue += GetCVar("dominatrix_scorepercp")*global_cpcountblue;
-            global_scoreteamred += GetCVar("dominatrix_scorepercp")*global_cpcountred;
-            timetoscore = timecur+((FixedMul(SECOND<<16, GetCVar("dominatrix_scoretime")))>>16);
+			// If not in double domination mode, give score every X seconds
+			if (!GetCVar("dominatrix_ddommode"))
+			{
+				global_scoreteamblue += GetCVar("dominatrix_scorepercp")*global_cpcountblue;
+				global_scoreteamred += GetCVar("dominatrix_scorepercp")*global_cpcountred;
+				if (IsCompatibilityMode("zdaemon"))
+					timetoscore = timecur+SECOND*GetCVar("dominatrix_scoretime");
+				else
+					timetoscore = timecur+((FixedMul(SECOND<<16, GetCVar("dominatrix_scoretime")))>>16);
+			}
+			else if (timetoscore != 0)
+			{
+				// Give points to the winning team
+				if (global_cpcountblue == global_cpcount)
+				{
+					global_scoreteamblue++;
+					global_announcement = ANNOUNCE_BLUESCORE;
+				}
+				else if (global_cpcountred == global_cpcount)
+				{
+					global_scoreteamred++;
+					global_announcement = ANNOUNCE_REDSCORE;
+				}
+
+				// Reset all the CP's back to grey if the ConVar is enabled
+				if (GetCVar("dominatrix_ddomresetonscore"))
+				{
+					// Cycle through all control points
+					for (int k=0; k<MAXCONTROLPOINTS; k++)
+					{
+						// If this control point isn't registered, move to the next one
+						if (global_controlpoints[k][CPDATA_TID] == 0)
+							continue;
+
+						// Set it back to grey
+						ACS_NamedExecuteAlways("Dominatrix_SetControlPointTeam", 0, global_controlpoints[k][CPDATA_TID], TEAM_NONE, true);
+					}
+				}
+				timetoscore = 0;
+			}
         }
 
         // Handle warmup time up
@@ -442,6 +514,18 @@ Script "Dominatrix_HandleScore" (void)
             global_gamestate = GAME_RUNNING;
             timetoend = timecur+GetCVar("dominatrix_timemax")*SECOND;
         }
+
+		// Handle Double Domination
+		if (GetCVar("dominatrix_ddommode"))
+		{
+			// If the time hasn't started decrementing and a team has all the CP's, start counting down
+			if ((global_cpcountblue == global_cpcount || global_cpcountred == global_cpcount) && timetoscore == 0)
+				timetoscore = Timer() + GetCVar("dominatrix_ddomscoretime")*SECOND;
+
+			// If a team lost a CP, kill the timer
+			if (global_cpcountblue != global_cpcount && global_cpcountred != global_cpcount)
+				timetoscore = 0;
+		}
 
         // Handle winning
         if (GetCVar("dominatrix_scoremax") != 0 || GetCVar("dominatrix_timemax") != 0)
@@ -455,13 +539,27 @@ Script "Dominatrix_HandleScore" (void)
             // If time is up or a team beat the max score
             if ((GetCVar("dominatrix_timemax") != 0 && timeup) || (GetCVar("dominatrix_scoremax") != 0 && scoreup))
             {
+				str tally = "";
+
                 // Decide how the game ended
                 if ((global_scoreteamblue >= maxscore && global_scoreteamred < maxscore) || global_scoreteamblue > global_scoreteamred)
+				{
+					tally = "Blue team wins!\n";
                     global_gamestate = GAME_BLUEWIN;
+					global_announcement = ANNOUNCE_BLUEWIN;
+				}
                 else if ((global_scoreteamred >= maxscore && global_scoreteamblue < maxscore) || global_scoreteamblue < global_scoreteamred)
+				{
+					tally = "Red team wins!\n";
                     global_gamestate = GAME_REDWIN;
+					global_announcement = ANNOUNCE_REDWIN;
+				}
                 else
+				{
+					tally = "No team wins!\n";
                     global_gamestate = GAME_DRAWWIN;
+					global_announcement = ANNOUNCE_DRAWGAME;
+				}
 
 				// State why the game ended
 				if (GetCVar("dominatrix_timemax") != 0 && timeup)
@@ -473,15 +571,76 @@ Script "Dominatrix_HandleScore" (void)
                 SetPlayerProperty(1, 1, PROP_TOTALLYFROZEN);
                 SetPlayerProperty(1, 2, PROP_INVULNERABILITY);
 
-				// End the game after three seconds
+				// Set the "official" team scores
+				if (IsCompatibilityMode("Zandronum"))
+				{
+					Team_GivePoints(TEAM_RED, global_scoreteamred, false);
+					Team_GivePoints(TEAM_BLUE, global_scoreteamblue, false);
+				}
+				else
+				{
+					SetTeamScore(TEAM_BLUE, global_scoreteamblue);
+					SetTeamScore(TEAM_RED, global_scoreteamred);
+				}
+
+				// Print to the console the final tally
+				tally = StrParam(s:tally, s:"Blue team score: ", d:global_scoreteamblue, s:"\nRed team score: ", d:global_scoreteamred);
+				Dominatrix_PrintConsoleBold(tally);
+
+				// End the game after X seconds
                 delay(SECOND*GetCVar("dominatrix_roundendtime"));
                 Exit_Normal(0);
             }
-        }
 
-        global_time = (timetoend-timecur)/SECOND;
-        delay(1);
-    }
+			// Handle announcer time/score
+			if (GetCVar("dominatrix_timemax") > 300 && timetoend-timecur == 300*SECOND)
+				global_announcement = ANNOUNCE_5MINUTES;
+			if (GetCVar("dominatrix_timemax") > 60 && timetoend-timecur == 60*SECOND)
+				global_announcement = ANNOUNCE_1MINUTE;
+			if (!announced3P && GetCVar("dominatrix_ddommode"))
+			{
+				if (GetCVar("dominatrix_scoremax") > 3 && ((GetCVar("dominatrix_scoremax")-global_scoreteamblue == 3) || (GetCVar("dominatrix_scoremax")-global_scoreteamred == 3)))
+				{
+					global_announcement = ANNOUNCE_3POINTS;
+					announced3P = true;
+				}
+			}
+			if (!announced2P && GetCVar("dominatrix_ddommode"))
+			{
+				if (GetCVar("dominatrix_scoremax") > 2 && ((GetCVar("dominatrix_scoremax")-global_scoreteamblue == 2) || (GetCVar("dominatrix_scoremax")-global_scoreteamred == 2)))
+				{
+					global_announcement = ANNOUNCE_2POINTS;
+					announced2P = true;
+				}
+			}
+			if (!announced1P && GetCVar("dominatrix_ddommode"))
+			{
+				if (GetCVar("dominatrix_scoremax") > 1 && ((GetCVar("dominatrix_scoremax")-global_scoreteamblue == 1) || (GetCVar("dominatrix_scoremax")-global_scoreteamred == 1)))
+				{
+					global_announcement = ANNOUNCE_1POINT;
+					announced1P = true;
+				}
+			}
+			if (!announced50P && !GetCVar("dominatrix_ddommode"))
+			{
+				if (GetCVar("dominatrix_scoremax") > 50 && ((GetCVar("dominatrix_scoremax")-global_scoreteamblue < 51) || (GetCVar("dominatrix_scoremax")-global_scoreteamred < 51)))
+				{
+					global_announcement = ANNOUNCE_50POINTS;
+					announced50P = true;
+				}
+			}
+
+			// Update global variables
+			global_time = timetoend;
+			if (GetCVar("dominatrix_ddommode"))
+			{
+				global_ddomtime = timetoscore;
+				if (global_cpcountred == global_cpcount)
+					global_ddomtime = -global_ddomtime; // Negative time so on the HUD we can tell the red team has the points
+			}
+			delay(1);
+		}
+	}
 }
 
 // Network serverside globals to clients
@@ -495,56 +654,67 @@ Script "Dominatrix_NetworkGlobals" (void)
 		into a string instead, where every new line of the string represents a new index of the array. This, of course, requires an
 		auxillary code to both convert the strings back to ints (AToI) and another to unpack the data.
 		I used this method in DoomWare and it works great. I should probably write a guide on this in the future...
+		This system isn't used in ZDaemon because clients can't access server CVars. Not a problem as the HUD isn't clientside in ZDaemon
+		due to all sorts of incompatibilities (mainly, no way to network data).
 	*/
-	str cpinfo = "";
 
-	SetGlobalCVar("__clientsync_redscore", global_scoreteamred);
-	SetGlobalCVar("__clientsync_bluescore", global_scoreteamblue);
-	SetGlobalCVar("__clientsync_gamestate", global_gamestate);
-	SetGlobalCVar("__clientsync_cpcount", global_cpcount);
-	SetGlobalCVar("__clientsync_time", global_time);
-	SetGlobalCVar("__clientsync_announce", global_announcement);
-	SetGlobalCVar("__clientsync_gameend", global_gameend);
-
-	// Pack the control point info into a string
-	for (int i=0; i<MAXCONTROLPOINTS; i++)
+	global_zdaemoncompat = IsCompatibilityMode("zdaemon");
+	if (!IsCompatibilityMode("zdaemon"))
 	{
-		if (global_controlpoints[i][CPDATA_TID] != 0)
+		str cpinfo1 = "";
+		str cpinfo2 = "";
+		SetGlobalCVar("__clientsync_redscore", global_scoreteamred);
+		SetGlobalCVar("__clientsync_bluescore", global_scoreteamblue);
+		SetGlobalCVar("__clientsync_gamestate", global_gamestate);
+		SetGlobalCVar("__clientsync_cpcount", global_cpcount);
+		SetGlobalCVar("__clientsync_time", global_time);
+		SetGlobalCVar("__clientsync_announce", global_announcement);
+		SetGlobalCVar("__clientsync_gameend", global_gameend);
+		SetGlobalCVar("__clientsync_ddomtime", global_ddomtime);
+
+		// Pack the control point info into a string
+		for (int i=0; i<MAXCONTROLPOINTS; i++)
 		{
-			cpinfo = StrParam(s:cpinfo, d:global_controlpoints[i][CPDATA_X], s:" ", d:global_controlpoints[i][CPDATA_Y], s:" ", d:global_controlpoints[i][CPDATA_Z]);
-			cpinfo = StrParam(s:cpinfo, s:" ", d:global_controlpoints[i][CPDATA_TEAM], s:" ", d:global_controlpoints[i][CPDATA_STATUS]);
-			cpinfo = StrParam(s:cpinfo, s:" ", d:global_controlpoints[i][CPDATA_CAPAMOUNT], c:'\n');
+			if (global_controlpoints[i][CPDATA_TID] != 0)
+			{
+				// Network the coordinates of the control point
+				cpinfo1 = StrParam(s:cpinfo1, d:global_controlpoints[i][CPDATA_X], s:" ",
+											  d:global_controlpoints[i][CPDATA_Y], s:" ",
+											  d:global_controlpoints[i][CPDATA_Z], c:'\n');
+
+				// Network the other control point data
+				cpinfo2 = StrParam(s:cpinfo2, d:global_controlpoints[i][CPDATA_TEAM], s:" ",
+											  d:global_controlpoints[i][CPDATA_STATUS], s:" ",
+											  d:global_controlpoints[i][CPDATA_CAPAMOUNT], c:'\n');
+			}
 		}
+		SetGlobalCVarString("__clientsync_cpinfo1", cpinfo1);
+		SetGlobalCVarString("__clientsync_cpinfo2", cpinfo2);
 	}
-	SetGlobalCVarString("__clientsync_cpinfo", cpinfo);
+	global_announcement = ANNOUNCE_EMPTY;
 
 	delay(1);
     restart;
 }
 
 // HUD - Zandronum
-Script "Dominatrix_HUD_Zandronum" (void) CLIENTSIDE
+Script "Dominatrix_HUD_Zandronum" OPEN CLIENTSIDE
 {
-	// Make sure only the person who called it actually sees the HUD
-    if (ConsolePlayerNumber() != PlayerNumber())
-        terminate;
-
-    int plynum = ConsolePlayerNumber();
-    SetActivator(TID_PLAYER+plynum);
+	// Only execute this in Zandronum
+	if (!IsCompatibilityMode("zandronum"))
+		terminate;
 
 	// Execute the announcer thread
-	if (GetUserCVar(plynum, "dominatrix_announcer"))
-		ACS_NamedExecuteAlways("Dominatrix_Announcer_Zandronum", 0, plynum);
+	if (!GetUserCVar(ConsolePlayerNumber(), "dominatrix_disableannouncer"))
+		ACS_NamedExecuteAlways("Dominatrix_Announcer_Zandronum", 0, ConsolePlayerNumber());
 
 	// Draw every frame
+	HUDClear();
 	while (true)
 	{
-		HudLoop(plynum);
-
-		// Restart if the player is still in the game
+		SetActivatorToPlayer(ConsolePlayerNumber());
+		HUDLoop(ConsolePlayerNumber(), PlayerIsSpectator(ConsolePlayerNumber()));
 		delay(1);
-		if (!PlayerInGame(plynum))
-			break;
 	}
 }
 
@@ -555,71 +725,209 @@ Script "Dominatrix_HUD_ZDoom" (void)
     SetActivator(TID_PLAYER+plynum);
 
 	// Execute the announcer thread
-	if (GetUserCVar(plynum, "dominatrix_announcer"))
+	if (!GetUserCVar(plynum, "dominatrix_disableannouncer"))
 		ACS_NamedExecuteAlways("Dominatrix_Announcer_ZDoom", 0, plynum);
 
 	// Draw every frame
-	while (true)
+	while (PlayerInGame(plynum))
 	{
-		HudLoop(plynum);
-
-		// Restart if the player is still in the game
+		HUDLoop(plynum, false);
 		delay(1);
-		if (!PlayerInGame(plynum))
-			break;
+		HUDClear();
 	}
 }
 
 // HUD - ZDaemon
 Script "Dominatrix_HUD_ZDaemon" (void)
 {
-    int plynum = ConsolePlayerNumber();
-    SetActivator(TID_PLAYER+plynum);
+    SetActivator(TID_PLAYER+PlayerNumber());
 
 	// Execute the announcer thread
-	if (GetUserCVar(plynum, "dominatrix_announcer"))
-		Client_NamedExecuteAlways(plynum, "Dominatrix_Announcer_ZDaemon", 0, plynum);
+	if (!GetCVar("dominatrix_disableannouncer"))
+		ACS_NamedExecuteAlways("Dominatrix_Announcer_ZDaemon", 0, PlayerNumber());
 
 	// Draw every frame
-	while (true)
+	while (PlayerNumber() != -1 && PlayerInGame(PlayerNumber()))
 	{
-		HudLoop(plynum);
-
-		// Restart if the player is still in the game
+		HUDLoop(PlayerNumber(), false);
 		delay(1);
-		if (!PlayerInGame(plynum))
-			break;
+		HUDClear();
 	}
 }
 
 // Handle the announcer (Zandronum)
 Script "Dominatrix_Announcer_Zandronum" (int plynum) CLIENTSIDE
 {
-	if (AnnouncerLoop(plynum))
-		delay(SECOND*2);
-	delay(1);
-	if (PlayerInGame(plynum))
-		restart;
+	int announcement1 = ANNOUNCE_EMPTY;
+	int announcement2 = ANNOUNCE_EMPTY;
+	int announcement3 = ANNOUNCE_EMPTY;
+	int nextAnnouncement = 0;
+
+	while (true)
+	{
+		bool isSpectator = !PlayerInGame(plynum);
+		int announcement = GetGlobalCVar("__clientsync_announce");
+
+		// If spectator, don't run any code below
+		if (isSpectator)
+		{
+			delay(1);
+			continue;
+		}
+		SetActivatorToPlayer(plynum);
+
+		// Check if a team specific announcement
+		if (announcement < 0)
+		{
+			switch(announcement)
+			{
+				case ANNOUNCE_BLUEGREY:
+					if (GetPlayerInfo(plynum, PLAYERINFO_TEAM) != TEAM_BLUE)
+						announcement = 0;
+					break;
+				case ANNOUNCE_REDGREY:
+					if (GetPlayerInfo(plynum, PLAYERINFO_TEAM) != TEAM_RED)
+						announcement = 0;
+					break;
+			}
+		}
+
+		// Find an empty position in our announcement "stack"
+		if (announcement != ANNOUNCE_EMPTY)
+		{
+			if (announcement1 == ANNOUNCE_EMPTY)
+				announcement1 = announcement;
+			else if (announcement2 == ANNOUNCE_EMPTY)
+				announcement2 = announcement;
+			else if (announcement2 == ANNOUNCE_EMPTY)
+				announcement3 = announcement;
+		}
+
+		// Execute an announcement
+		if (nextAnnouncement == 0 && announcement1 != ANNOUNCE_EMPTY)
+		{
+			PlayAnnouncement(plynum, announcement1);
+			announcement1 = announcement2;
+			announcement2 = announcement3;
+			announcement3 = ANNOUNCE_EMPTY;
+			nextAnnouncement = SECOND*2;
+		}
+
+		// Decrease the time to execute the next announcement
+		if (nextAnnouncement > 0)
+			nextAnnouncement--;
+		delay(1);
+	}
 }
 
 // Handle the announcer (ZDoom)
 Script "Dominatrix_Announcer_ZDoom" (int plynum)
 {
-	if (AnnouncerLoop(plynum))
-		delay(SECOND*2);
-	delay(1);
-	if (PlayerInGame(plynum))
-		restart;
+	int announcement1 = ANNOUNCE_EMPTY;
+	int announcement2 = ANNOUNCE_EMPTY;
+	int announcement3 = ANNOUNCE_EMPTY;
+	int nextAnnouncement = 0;
+	while (PlayerInGame(plynum))
+	{
+		int announcement = GetGlobalCVar("__clientsync_announce");
+
+		// Check if a team specific announcement
+		if (announcement < 0)
+		{
+			switch(announcement)
+			{
+				case ANNOUNCE_BLUEGREY:
+					if (GetPlayerInfo(plynum, PLAYERINFO_TEAM) != TEAM_BLUE)
+						announcement = 0;
+					break;
+				case ANNOUNCE_REDGREY:
+					if (GetPlayerInfo(plynum, PLAYERINFO_TEAM) != TEAM_RED)
+						announcement = 0;
+					break;
+			}
+		}
+
+		// Find an empty position in our announcement "stack"
+		if (announcement != ANNOUNCE_EMPTY)
+		{
+			if (announcement1 == ANNOUNCE_EMPTY)
+				announcement1 = announcement;
+			else if (announcement2 == ANNOUNCE_EMPTY)
+				announcement2 = announcement;
+			else if (announcement2 == ANNOUNCE_EMPTY)
+				announcement3 = announcement;
+		}
+
+		// Execute an announcement
+		if (nextAnnouncement == 0 && announcement1 != ANNOUNCE_EMPTY)
+		{
+			PlayAnnouncement(plynum, announcement1);
+			announcement1 = announcement2;
+			announcement2 = announcement3;
+			announcement3 = ANNOUNCE_EMPTY;
+			nextAnnouncement = SECOND*2;
+		}
+
+		// Decrease the time to execute the next announcement
+		if (nextAnnouncement > 0)
+			nextAnnouncement--;
+		delay(1);
+	}
 }
 
 // Handle the announcer (ZDaemon)
 Script "Dominatrix_Announcer_ZDaemon" (int plynum)
 {
-	if (AnnouncerLoop(plynum))
-		delay(SECOND*2);
-	delay(1);
-	if (PlayerInGame(plynum))
-		restart;
+	int announcement1 = ANNOUNCE_EMPTY;
+	int announcement2 = ANNOUNCE_EMPTY;
+	int announcement3 = ANNOUNCE_EMPTY;
+	int nextAnnouncement = 0;
+	while (PlayerNumber() != -1 && PlayerInGame(plynum))
+	{
+		int announcement = GetGlobalCVar("__clientsync_announce");
+
+		// Check if a team specific announcement
+		if (announcement < 0)
+		{
+			switch(announcement)
+			{
+				case ANNOUNCE_BLUEGREY:
+					if (GetPlayerInfo(plynum, PLAYERINFO_TEAM) != TEAM_BLUE)
+						announcement = 0;
+					break;
+				case ANNOUNCE_REDGREY:
+					if (GetPlayerInfo(plynum, PLAYERINFO_TEAM) != TEAM_RED)
+						announcement = 0;
+					break;
+			}
+		}
+
+		// Find an empty position in our announcement "stack"
+		if (nextAnnouncement == 0 && announcement != ANNOUNCE_EMPTY)
+		{
+			if (announcement1 == ANNOUNCE_EMPTY)
+				announcement1 = announcement;
+			else if (announcement2 == ANNOUNCE_EMPTY)
+				announcement2 = announcement;
+			else if (announcement2 == ANNOUNCE_EMPTY)
+				announcement3 = announcement;
+		}
+
+		// Execute an announcement
+		if (announcement1 != ANNOUNCE_EMPTY)
+		{
+			PlayAnnouncement(plynum, announcement1);
+			announcement1 = announcement2;
+			announcement2 = announcement3;
+			announcement3 = ANNOUNCE_EMPTY;
+			nextAnnouncement = SECOND*2;
+		}
+
+		// Decrease the time to execute the next announcement
+		if (nextAnnouncement > 0)
+			nextAnnouncement--;
+		delay(1);
+	}
 }
 
 
@@ -641,21 +949,33 @@ Script "Dominatrix_AddControlPoint" (int x, int y, int z)
         z = GetActorZ(0);
     }
 
-    int index = Dominatrix_FindEmptyCP();
-    if (index == -1)
-        terminate;
+	// Find a free CP slot
+    int index = -2;
+    while (index == -2)
+	{
+        index = Dominatrix_FindEmptyCP();
+		if (index == -1)
+			terminate;
+		delay(1);
+	}
 
-    // Spawn the Altar and Eye
-    SpawnForced("ControlPointAltar", x, y, z, global_controlpoints[index][CPDATA_TID], 0);
-    SpawnForced("ControlPointEye", x, y, z, global_controlpoints[index][CPDATA_TID], 0);
+    // Spawn the Altar and Eye (Done like this for ZDaemon Compatibility)
+	SpawnForced("MapSpot", x, y, z, TID_DELETE, 0.0);
+	Thing_SpawnNoFog(TID_DELETE, T_CPALTAR, 0.0, global_controlpoints[index][CPDATA_TID]);
+	Thing_SpawnNoFog(TID_DELETE, T_CPEYE, 0.0, global_controlpoints[index][CPDATA_TID]+MAXCONTROLPOINTS);
+	Thing_Remove(TID_DELETE);
     global_cpcount++;
 
     // Setup the altar
-    ACS_NamedExecuteAlways("Dominatrix_ApplyTranslation", 0, global_controlpoints[index][CPDATA_TID], TRANSLATION_GREY);
+    ACS_NamedExecuteAlways("Dominatrix_ApplyTranslation", 0, global_controlpoints[index][CPDATA_TID]+MAXCONTROLPOINTS, TRANSLATION_GREY);
     global_controlpoints[index][CPDATA_TEAM] = TEAM_NONE;
 	global_controlpoints[index][CPDATA_X] = x;
 	global_controlpoints[index][CPDATA_Y] = y;
 	global_controlpoints[index][CPDATA_Z] = z;
+}
+script 24290 (int x, int y, int z) // Proxy script for ZDaemon DEHACKED Support
+{
+	ACS_NamedExecuteAlways("Dominatrix_AddControlPoint", 0, x, y, z);
 }
 
 // Adds a control point for the blue team
@@ -672,23 +992,35 @@ Script "Dominatrix_AddControlPointBlue" (int x, int y, int z)
         z = GetActorZ(0);
     }
 
-    int index = Dominatrix_FindEmptyCP();
-    if (index == -1)
-        terminate;
+	// Find a free CP slot
+    int index = -2;
+    while (index == -2)
+	{
+        index = Dominatrix_FindEmptyCP();
+		if (index == -1)
+			terminate;
+		delay(1);
+	}
 
-    // Spawn the Altar and Eye
-    SpawnForced("ControlPointAltar", x, y, z, global_controlpoints[index][CPDATA_TID], 0);
-    SpawnForced("ControlPointEye", x, y, z, global_controlpoints[index][CPDATA_TID], 0);
+    // Spawn the Altar and Eye (Done like this for ZDaemon Compatibility)
+	SpawnForced("MapSpot", x, y, z, TID_DELETE, 0.0);
+	Thing_SpawnNoFog(TID_DELETE, T_CPALTAR, 0.0, global_controlpoints[index][CPDATA_TID]);
+	Thing_SpawnNoFog(TID_DELETE, T_CPEYE, 0.0, global_controlpoints[index][CPDATA_TID]+MAXCONTROLPOINTS);
+	Thing_Remove(TID_DELETE);
     global_cpcount++;
     global_cpcountblue++;
 
     // Setup the altar
-    ACS_NamedExecuteAlways("Dominatrix_ApplyTranslation", 0, global_controlpoints[index][CPDATA_TID], TRANSLATION_BLUE);
-    global_controlpoints[index][CPDATA_CAPAMOUNT] = 100.0;
+    ACS_NamedExecuteAlways("Dominatrix_ApplyTranslation", 0, global_controlpoints[index][CPDATA_TID]+MAXCONTROLPOINTS, TRANSLATION_BLUE);
+    global_controlpoints[index][CPDATA_CAPAMOUNT] = GetCVar("dominatrix_caphealth");
     global_controlpoints[index][CPDATA_TEAM] = TEAM_BLUE;
 	global_controlpoints[index][CPDATA_X] = x;
 	global_controlpoints[index][CPDATA_Y] = y;
 	global_controlpoints[index][CPDATA_Z] = z;
+}
+script 24291 (int x, int y, int z) // Proxy script for ZDaemon DEHACKED Support
+{
+	ACS_NamedExecuteAlways("Dominatrix_AddControlPointBlue", 0, x, y, z);
 }
 
 // Adds a control point for the red team
@@ -705,63 +1037,80 @@ Script "Dominatrix_AddControlPointRed" (int x, int y, int z)
         z = GetActorZ(0);
     }
 
-    int index = Dominatrix_FindEmptyCP();
-    if (index == -1)
-        terminate;
+	// Find a free CP slot
+    int index = -2;
+    while (index == -2)
+	{
+        index = Dominatrix_FindEmptyCP();
+		if (index == -1)
+			terminate;
+		delay(1);
+	}
 
-    // Spawn the Altar and Eye
-    SpawnForced("ControlPointAltar", x, y, z, global_controlpoints[index][CPDATA_TID], 0);
-    SpawnForced("ControlPointEye", x, y, z, global_controlpoints[index][CPDATA_TID], 0);
+    // Spawn the Altar and Eye (Done like this for ZDaemon Compatibility)
+	SpawnForced("MapSpot", x, y, z, TID_DELETE, 0.0);
+	Thing_SpawnNoFog(TID_DELETE, T_CPALTAR, 0.0, global_controlpoints[index][CPDATA_TID]);
+	Thing_SpawnNoFog(TID_DELETE, T_CPEYE, 0.0, global_controlpoints[index][CPDATA_TID]+MAXCONTROLPOINTS);
+	Thing_Remove(TID_DELETE);
     global_cpcount++;
     global_cpcountred++;
 
     // Setup the altar
-    ACS_NamedExecuteAlways("Dominatrix_ApplyTranslation", 0, global_controlpoints[index][CPDATA_TID], TRANSLATION_RED);
-    global_controlpoints[index][CPDATA_CAPAMOUNT] = -100.0;
+    ACS_NamedExecuteAlways("Dominatrix_ApplyTranslation", 0, global_controlpoints[index][CPDATA_TID]+MAXCONTROLPOINTS, TRANSLATION_RED);
+    global_controlpoints[index][CPDATA_CAPAMOUNT] = -GetCVar("dominatrix_caphealth");
     global_controlpoints[index][CPDATA_TEAM] = TEAM_RED;
 	global_controlpoints[index][CPDATA_X] = x;
 	global_controlpoints[index][CPDATA_Y] = y;
 	global_controlpoints[index][CPDATA_Z] = z;
 }
+script 24292 (int x, int y, int z) // Proxy script for ZDaemon DEHACKED Support
+{
+	ACS_NamedExecuteAlways("Dominatrix_AddControlPointRed", 0, x, y, z);
+}
 
 // Set the control point to the specified team
 // Argument 0 - The TID of the control point
 // Argument 1 - The team to set the control point to
-Script "Dominatrix_SetControlPointTeam" (int tid, int team)
+Script "Dominatrix_SetControlPointTeam" (int tid, int team, int silent)
 {
     if (tid == 0)
         tid = ActivatorTID();
 
     if (global_controlpoints[tid-TID_CP][CPDATA_TEAM] == TEAM_NONE && team == TEAM_BLUE)
     {
-        SetActorState(tid, "Grey2Blue");
-        global_controlpoints[tid-TID_CP][CPDATA_CAPAMOUNT] = 100.0;
+        global_controlpoints[tid-TID_CP][CPDATA_CAPAMOUNT] = GetCVar("dominatrix_caphealth");
         global_cpcountblue++;
-		global_announcement = ANNOUNCE_BLUE;
+		if (!silent)
+			global_announcement = ANNOUNCE_BLUE;
+		ACS_NamedExecuteAlways("Dominatrix_DoControlPointAnimation", 0, tid, ANIM_GREY2BLUE);
     }
     if (global_controlpoints[tid-TID_CP][CPDATA_TEAM] == TEAM_NONE && team == TEAM_RED)
     {
-        SetActorState(tid, "Grey2Red");
-        global_controlpoints[tid-TID_CP][CPDATA_CAPAMOUNT] = -100.0;
+        global_controlpoints[tid-TID_CP][CPDATA_CAPAMOUNT] = -GetCVar("dominatrix_caphealth");
         global_cpcountred++;
-		global_announcement = ANNOUNCE_RED;
+		if (!silent)
+			global_announcement = ANNOUNCE_RED;
+		ACS_NamedExecuteAlways("Dominatrix_DoControlPointAnimation", 0, tid, ANIM_GREY2RED);
     }
     if (global_controlpoints[tid-TID_CP][CPDATA_TEAM] == TEAM_BLUE && team == TEAM_NONE)
     {
-        SetActorState(tid, "Blue2Grey");
-        global_controlpoints[tid-TID_CP][CPDATA_CAPAMOUNT] = 0.0;
+        global_controlpoints[tid-TID_CP][CPDATA_CAPAMOUNT] = 0;
         global_cpcountblue--;
-		global_announcement = ANNOUNCE_BLUEGREY;
+		if (!silent)
+			global_announcement = ANNOUNCE_BLUEGREY;
+
+		ACS_NamedExecuteAlways("Dominatrix_DoControlPointAnimation", 0, tid, ANIM_BLUE2GREY);
     }
     if (global_controlpoints[tid-TID_CP][CPDATA_TEAM] == TEAM_RED && team == TEAM_NONE)
     {
-        SetActorState(tid, "Red2Grey");
-        global_controlpoints[tid-TID_CP][CPDATA_CAPAMOUNT] = 0.0;
+        global_controlpoints[tid-TID_CP][CPDATA_CAPAMOUNT] = 0;
         global_cpcountred--;
-		global_announcement = ANNOUNCE_REDGREY;
+		if (!silent)
+			global_announcement = ANNOUNCE_REDGREY;
+		ACS_NamedExecuteAlways("Dominatrix_DoControlPointAnimation", 0, tid, ANIM_RED2GREY);
     }
+	global_controlpoints[tid-TID_CP][CPDATA_TEAM] = team;
 
-    global_controlpoints[tid-TID_CP][CPDATA_TEAM] = team;
 }
 
 // Apply a translation to an actor
@@ -770,6 +1119,71 @@ Script "Dominatrix_SetControlPointTeam" (int tid, int team)
 Script "Dominatrix_ApplyTranslation" (int tid, int translation)
 {
     Thing_SetTranslation(tid, translation);
+}
+
+// Performs an animation on a control point eye
+// Argument 0 - The TID of the Control point altar
+// Argument 1 - The animation to perform
+Script "Dominatrix_DoControlPointAnimation" (int tid, int animation)
+{
+	// If using ZDaemon, do the animation manually
+	if (IsCompatibilityMode("zdaemon"))
+	{
+		Thing_Remove(tid+MAXCONTROLPOINTS);
+		switch (animation)
+		{
+			case ANIM_GREY2BLUE:
+			case ANIM_GREY2RED:
+				Thing_SpawnNoFog(tid, T_CPEYESPIN1, 0.0, tid+MAXCONTROLPOINTS);
+				ACS_NamedExecuteAlways("Dominatrix_ApplyTranslation", 0, tid+MAXCONTROLPOINTS, TRANSLATION_GREY);
+				break;
+			case ANIM_BLUE2GREY:
+				Thing_SpawnNoFog(tid, T_CPEYESPIN2, 0.0, tid+MAXCONTROLPOINTS);
+				ACS_NamedExecuteAlways("Dominatrix_ApplyTranslation", 0, tid+MAXCONTROLPOINTS, TRANSLATION_BLUE);
+				break;
+			case ANIM_RED2GREY:
+				Thing_SpawnNoFog(tid, T_CPEYESPIN2, 0.0, tid+MAXCONTROLPOINTS);
+				ACS_NamedExecuteAlways("Dominatrix_ApplyTranslation", 0, tid+MAXCONTROLPOINTS, TRANSLATION_RED);
+				break;
+		}
+		delay(6);
+		switch (animation)
+		{
+			case ANIM_GREY2BLUE:
+			case ANIM_BLUE2GREY: ACS_NamedExecuteAlways("Dominatrix_ApplyTranslation", 0, tid+MAXCONTROLPOINTS, TRANSLATION_2BLUE); break;
+			case ANIM_GREY2RED:
+			case ANIM_RED2GREY:  ACS_NamedExecuteAlways("Dominatrix_ApplyTranslation", 0, tid+MAXCONTROLPOINTS, TRANSLATION_2RED); break;
+		}
+		delay(12);
+		switch (animation)
+		{
+			case ANIM_GREY2BLUE: ACS_NamedExecuteAlways("Dominatrix_ApplyTranslation", 0, tid+MAXCONTROLPOINTS, TRANSLATION_BLUE); break;
+			case ANIM_GREY2RED:  ACS_NamedExecuteAlways("Dominatrix_ApplyTranslation", 0, tid+MAXCONTROLPOINTS, TRANSLATION_RED); break;
+			case ANIM_BLUE2GREY:
+			case ANIM_RED2GREY:  ACS_NamedExecuteAlways("Dominatrix_ApplyTranslation", 0, tid+MAXCONTROLPOINTS, TRANSLATION_GREY); break;
+		}
+		delay(6);
+		Thing_Remove(tid+MAXCONTROLPOINTS);
+		Thing_SpawnNoFog(tid, T_CPEYE, 0.0, tid+MAXCONTROLPOINTS);
+		switch (animation)
+		{
+			case ANIM_GREY2BLUE: ACS_NamedExecuteAlways("Dominatrix_ApplyTranslation", 0, tid+MAXCONTROLPOINTS, TRANSLATION_BLUE); break;
+			case ANIM_GREY2RED:  ACS_NamedExecuteAlways("Dominatrix_ApplyTranslation", 0, tid+MAXCONTROLPOINTS, TRANSLATION_RED); break;
+			case ANIM_BLUE2GREY:
+			case ANIM_RED2GREY:  ACS_NamedExecuteAlways("Dominatrix_ApplyTranslation", 0, tid+MAXCONTROLPOINTS, TRANSLATION_GREY); break;
+		}
+	}
+	else
+	{
+		// Otherwise, use the DECORATE SetActorState functions
+		switch (animation)
+		{
+			case ANIM_GREY2BLUE: SetActorState(tid+MAXCONTROLPOINTS, "Grey2Blue"); break;
+			case ANIM_GREY2RED:  SetActorState(tid+MAXCONTROLPOINTS, "Grey2Red"); break;
+			case ANIM_BLUE2GREY: SetActorState(tid+MAXCONTROLPOINTS, "Blue2Grey"); break;
+			case ANIM_RED2GREY:  SetActorState(tid+MAXCONTROLPOINTS, "Red2Grey"); break;
+		}
+	}
 }
 
 
@@ -781,12 +1195,17 @@ Script "Dominatrix_ApplyTranslation" (int tid, int translation)
                     Dominatrix_FindEmptyCP
 
 Finds an empty slot in the global control points array
-Returns - The first empty index of the array
+Returns - The first empty index of the array, -1 if none was found, -2 if busy
 -------------------------------------------------------------*/
 function int Dominatrix_FindEmptyCP(void)
 {
+	// Make sure that if someone is already calling this function that it can't be called again by another script until finished
+	if (global_cpslotmutex == false)
+		return -2;
+
     // Find an empty spot in the control points global
-    for (int i=0; i<MAXCONTROLPOINTS; i++)
+    global_cpslotmutex = false;
+	for (int i=0; i<MAXCONTROLPOINTS; i++)
     {
         // If we found an empty slot, mark it as not empty
         if (global_controlpoints[i][CPDATA_TID] == 0)
@@ -802,6 +1221,8 @@ function int Dominatrix_FindEmptyCP(void)
             return -1;
         }
     }
+
+	global_cpslotmutex = true;
     return i;
 }
 
@@ -829,12 +1250,40 @@ function void Dominatrix_PrintConsoleBold(str msg)
 }
 
 /*-------------------------------------------------------------
+                       IsCompatibilityMode
+
+Checks whether the passed compatibility mode is selected
+Argument 0 - A String with the compatiblity mode to check
+Returns - True if the compatibility mode is selected, false if otherwise
+-------------------------------------------------------------*/
+function bool IsCompatibilityMode(str compatMode)
+{
+	if (!global_zdaemoncompat)
+		return !StrICmp(GetCVarString("dominatrix_compatibility"), compatMode);
+	return true;
+}
+
+/*-------------------------------------------------------------
+						 GetClientCVar
+Gets a clientside CVar (for ZDaemon compatibility)
+Argument 1 - An int with the ConsolePlayerNumber to check
+Argument 1 - A string with the cvar to check
+Returns - The value of the cvar
+-------------------------------------------------------------*/
+function bool GetClientCVar(int plynum, str cvar)
+{
+	if (IsCompatibilityMode("zdaemon"))
+		return GetCvar(cvar);
+	return GetUserCVar(plynum, cvar);
+}
+
+/*-------------------------------------------------------------
                             distance
 
 Calculates the distance between two actors
 Argument 0 - An int with the first actor's TID
 Argument 1 - An int with the second actor's TID
-Returns - The distance between both actors (in Fixed Point)
+Returns - The distance between both actors as an integer
 -------------------------------------------------------------*/
 function int distance(int tid1, int tid2)
 {
@@ -851,7 +1300,7 @@ function int distance(int tid1, int tid2)
     if(((ang+0.125)%0.5) > 0.25) len = fixeddiv(z, sin(ang));
     else len = fixeddiv(len, cos(ang));
 
-    return len;
+    return len>>16;
 }
 
 /*-------------------------------------------------------------
@@ -872,57 +1321,79 @@ function void SetActorInventory(int tid, str item, int amount)
 }
 
 /*-------------------------------------------------------------
-							HudLoop
+							HUDLoop
 
 The HUD code that is called every frame
 Argument 0 - The playernumber of the client
+Argument 1 - Whether the player is spectating
 -------------------------------------------------------------*/
-function void HudLoop(int plynum)
+function void HUDLoop(int plynum, bool isSpectator)
 {
-	str cpinfo = GetCVarString("__clientsync_cpinfo");
-	int datalen = StrLen(cpinfo);
+	str cpinfo1 = GetGlobalCVarString("__clientsync_cpinfo1");
+	str cpinfo2 = GetGlobalCVarString("__clientsync_cpinfo2");
+	int datalen1 = StrLen(cpinfo1);
+	int datalen2 = StrLen(cpinfo2);
 
 	// Get the resolution
 	int scrW = 320;
 	int scrH = 240;
-	if (GetUserCVar(plynum, "dominatrix_hudscale") == FALSE)
+	int timeToEnd = GetGlobalCVar("__clientsync_time");
+	int ddomTime = GetGlobalCVar("__clientsync_ddomtime");
+	if (GetClientCVar(plynum, "dominatrix_disablehudscale"))
 	{
 		scrW = GetScreenWidth();
 		scrH = GetScreenHeight();
 	}
 
+	// Reset some HUD messages
+	HudMessage(s:""; HUDMSG_PLAIN, MSGID_CPCAP1, CR_WHITE, 0.0, 0.0, 0.1);
+	HudMessage(s:""; HUDMSG_PLAIN, MSGID_CPCAP2, CR_WHITE, 0.0, 0.0, 0.1);
+
 	// Draw control point info
-	int start = 0;
-	for (int i=0; i<GetCVar("__clientsync_cpcount"); i++)
+	int start1 = 0;
+	int start2 = 0;
+	for (int i=0; i<GetGlobalCVar("__clientsync_cpcount"); i++)
 	{
-		for (int j=start; j<datalen; j++)
+		int j;
+		str data1="";
+		str data2="";
+		for (j=start1; j<datalen1; j++)
 		{
-			if (GetChar(cpinfo, j) == '\n')
+			if (GetChar(cpinfo1, j) == '\n')
 			{
-				str data = StrMid(cpinfo, start, j-start);
-				CPInfoDraw(plynum, data, i, scrW, scrH);
-				start = j+1;
+				data1 = StrMid(cpinfo1, start1, j-start1);
+				start1 = j+1;
 				break;
 			}
 		}
-
+		for (j=start2; j<datalen2; j++)
+		{
+			if (GetChar(cpinfo2, j) == '\n')
+			{
+				data2 = StrMid(cpinfo2, start2, j-start2);
+				start2 = j+1;
+				break;
+			}
+		}
+		CPInfoDraw(plynum, isSpectator, data1, data2, i, scrW, scrH);
 	}
 
 	// Set the hud size
-	SetFont("BIGFONT");
+	SetFont("DBIGFONT");
 	SetHudSize(scrW, scrH, false);
 
 	// Print the time
-	if (GetCVar("__clientsync_gamestate") == GAME_RUNNING && GetCVar("dominatrix_timemax") != 0)
+	if (GetGlobalCVar("__clientsync_gamestate") == GAME_RUNNING && timeToEnd != 0)
 	{
 		int timeY = 0.1;
-		if (GetUserCVar(plynum, "dominatrix_showallcps") && GetCVar("__clientsync_cpcount") > 0)
-			timeY = ((24*ceil(FixedDiv(GetCVar("__clientsync_cpcount")<<16, CPPERLINEHUD<<16)))<<16)+0.1;
-		int time = GetCVar("__clientsync_time")+1;
+		if (!GetClientCVar(plynum, "dominatrix_disableshowallcps") && GetGlobalCVar("__clientsync_cpcount") > 0)
+			timeY = ((24*ceil(FixedDiv(GetGlobalCVar("__clientsync_cpcount")<<16, CPPERLINEHUD<<16)))<<16)+0.1;
+		int time = ceil(FixedDiv((timeToEnd-Timer())<<16, SECOND<<16));
 		int minutes = time/60;
 		int seconds = time%60;
 		str timestr = "";
 
+		// Create the time string
 		if (minutes < 10)
 			timestr = "0";
 		timestr = StrParam(s:timestr, d:minutes, s:":");
@@ -930,45 +1401,72 @@ function void HudLoop(int plynum)
 			timestr = StrParam(s:timestr, s:"0");
 		timestr = StrParam(s:timestr, d:seconds);
 
+		// Print the time left
 		HudMessage(s:timestr; HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_HUDTIME, CR_WHITE, (scrW/2 << 16), timeY, 1.0);
+
+		// Handle the double domination time
+		if (ddomTime != 0)
+		{
+			int color = CR_LIGHTBLUE;
+			if (ddomTime < 0)
+				color = CR_RED;
+			timeY += 16.0;
+			time = ceil(FixedDiv((abs(ddomTime)-Timer())<<16, SECOND<<16));
+			minutes = time/60;
+			seconds = time%60;
+			timestr = "";
+
+			if (minutes < 10)
+				timestr = "0";
+			timestr = StrParam(s:timestr, d:minutes, s:":");
+			if (seconds < 10)
+				timestr = StrParam(s:timestr, s:"0");
+			timestr = StrParam(s:timestr, d:seconds);
+			HudMessage(s:timestr; HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_HUDTIME2, color, (scrW/2 << 16), timeY, 1.0);
+		}
+		else
+			HudMessage(s:""; HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_HUDTIME2, CR_WHITE, (scrW/2 << 16), 0.1, 1.0);
 	}
 	else
+	{
 		HudMessage(s:""; HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_HUDTIME, CR_WHITE, (scrW/2 << 16), 0.1, 1.0);
+		HudMessage(s:""; HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_HUDTIME2, CR_WHITE, (scrW/2 << 16), 0.1, 1.0);
+	}
 
 	// Print the team scores
 	SetFont("SMALLFONT");
-	if (GetUserCVar(plynum, "dominatrix_hudwidescreen"))
+	if (!GetClientCVar(plynum, "dominatrix_disablehudwidescreen"))
 	{
-		HudMessage(s:"score\n", d:GetCVar("__clientsync_bluescore"); HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_HUDBLUES, CR_BLUE, -48.5, 0.1, 1.0);
-		HudMessage(s:"score\n", d:GetCVar("__clientsync_redscore"); HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_HUDREDS, CR_RED, (scrW << 16)+48.6, 0.1, 1.0);
+		HudMessage(s:"score\n", d:GetGlobalCVar("__clientsync_bluescore"); HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_HUDBLUES, CR_LIGHTBLUE, -48.5, 0.1, 1.0);
+		HudMessage(s:"score\n", d:GetGlobalCVar("__clientsync_redscore"); HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_HUDREDS, CR_RED, (scrW << 16)+48.6, 0.1, 1.0);
 	}
 	else
 	{
-		HudMessage(s:"score\n", d:GetCVar("__clientsync_bluescore"); HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_HUDBLUES, CR_BLUE, 0.5, 0.1, 1.0);
-		HudMessage(s:"score\n", d:GetCVar("__clientsync_redscore"); HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_HUDREDS, CR_RED, (scrW << 16)+0.6, 0.1, 1.0);
+		HudMessage(s:"score\n", d:GetGlobalCVar("__clientsync_bluescore"); HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_HUDBLUES, CR_LIGHTBLUE, 0.5, 0.1, 1.0);
+		HudMessage(s:"score\n", d:GetGlobalCVar("__clientsync_redscore"); HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_HUDREDS, CR_RED, (scrW << 16)+0.6, 0.1, 1.0);
 	}
 
 	// If the game ended
-	if (GetCVar("__clientsync_gameend") != END_NONE)
+	if (GetGlobalCVar("__clientsync_gameend") != END_NONE)
 	{
 		str gameover = "";
 
 		// State why the game ended
-		if (GetCVar("__clientsync_gameend") == END_TIME)
+		if (GetGlobalCVar("__clientsync_gameend") == END_TIME)
 			gameover = "Time up!\n";
 		else
 			gameover = "Score limit reached!\n";
 
 		// Attach the winner
-		if (GetCVar("__clientsync_gamestate") == GAME_BLUEWIN)
+		if (GetGlobalCVar("__clientsync_gamestate") == GAME_BLUEWIN)
 			gameover = StrParam(s:gameover, s:"Blue Wins!");
-		else if (GetCVar("__clientsync_gamestate") == GAME_REDWIN)
+		else if (GetGlobalCVar("__clientsync_gamestate") == GAME_REDWIN)
 			gameover = StrParam(s:gameover, s:"Red Wins!");
-		else if (GetCVar("__clientsync_gamestate") == GAME_DRAWWIN)
+		else if (GetGlobalCVar("__clientsync_gamestate") == GAME_DRAWWIN)
 			gameover = StrParam(s:gameover, s:"Draw game!");
 
 		// Print the winner
-		SetFont("BIGFONT");
+		SetFont("DBIGFONT");
 		HudMessage(s:gameover; HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_HUDSTATE, CR_RED, (scrW/2 << 16)+0.4, (scrH/2 << 16)-32.0, 1.0);
 	}
 	else
@@ -976,16 +1474,15 @@ function void HudLoop(int plynum)
 }
 
 /*-------------------------------------------------------------
-						 AnnouncerLoop
+					   PlayAnnouncement
 
-The announcer code that is called every frame
+Code that plays an announcement
 Argument 0 - The playernumber of the client
 Returns - true if we played a sound, false if otherwise
 -------------------------------------------------------------*/
-function bool AnnouncerLoop(int plynum)
+function void PlayAnnouncement(int plynum, int announcement)
 {
-	int announcement = GetCVar("__clientsync_announce");
-	str sound = "Dominatrix/Announcer/CP";
+	str sound = "Dominatrix/Announcer/";
 	int plyteam = GetPlayerInfo(plynum, PLAYERINFO_TEAM);
 
 	// Decide which sound to play
@@ -993,35 +1490,65 @@ function bool AnnouncerLoop(int plynum)
 	{
 		case ANNOUNCE_BLUEGREY:
 			if (plyteam == TEAM_BLUE)
-				sound = StrParam(s:sound, s:"Grey", d:Random(1, 3));
-			else
-				return false;
+				sound = StrParam(s:sound, s:"CPGrey", d:Random(1, 3));
 			break;
 		case ANNOUNCE_REDGREY:
 			if (plyteam == TEAM_RED)
-				sound = StrParam(s:sound, s:"Grey", d:Random(1, 3));
-			else
-				return false;
+				sound = StrParam(s:sound, s:"CPGrey", d:Random(1, 3));
 			break;
 		case ANNOUNCE_BLUE:
 			if (plyteam == TEAM_BLUE)
-				sound = StrParam(s:sound, s:"Get", d:Random(1, 3));
+				sound = StrParam(s:sound, s:"CPGet", d:Random(1, 4));
 			else
-				sound = StrParam(s:sound, s:"Lose", d:Random(1, 3));
+				sound = StrParam(s:sound, s:"CPLose", d:Random(1, 3));
 			break;
 		case ANNOUNCE_RED:
 			if (plyteam == TEAM_RED)
-				sound = StrParam(s:sound, s:"Get", d:Random(1, 3));
+				sound = StrParam(s:sound, s:"CPGet", d:Random(1, 4));
 			else
-				sound = StrParam(s:sound, s:"Lose", d:Random(1, 3));
+				sound = StrParam(s:sound, s:"CPLose", d:Random(1, 3));
 			break;
-		default:
-			return false;
+		case ANNOUNCE_BLUESCORE:
+			return;
+		case ANNOUNCE_REDSCORE:
+			return;
+		case ANNOUNCE_BLUEWIN:
+			if (plyteam == TEAM_BLUE)
+				sound = StrParam(s:sound, s:"WinGame", d:Random(1, 3));
+			else
+				sound = StrParam(s:sound, s:"LoseGame");
+			break;
+		case ANNOUNCE_REDWIN:
+			if (plyteam == TEAM_RED)
+				sound = StrParam(s:sound, s:"WinGame", d:Random(1, 3));
+			else
+				sound = StrParam(s:sound, s:"LoseGame");
+			break;
+		case ANNOUNCE_DRAWGAME:
+			sound = StrParam(s:sound, s:"DrawGame");
+			break;
+		case ANNOUNCE_1MINUTE:
+			sound = StrParam(s:sound, s:"1Minute");
+			break;
+		case ANNOUNCE_5MINUTES:
+			sound = StrParam(s:sound, s:"5Minutes");
+			break;
+		case ANNOUNCE_1POINT:
+			sound = StrParam(s:sound, s:"1PointLeft");
+			break;
+		case ANNOUNCE_2POINTS:
+			sound = StrParam(s:sound, s:"2PointsLeft");
+			break;
+		case ANNOUNCE_3POINTS:
+			sound = StrParam(s:sound, s:"3PointsLeft");
+			break;
+		case ANNOUNCE_50POINTS:
+			sound = StrParam(s:sound, s:"50PointsLeft");
+			break;
 	}
 
 	// Play the sound and return that we did
 	LocalAmbientSound(sound, 127);
-	return true;
 }
 
 /*-------------------------------------------------------------
@@ -1029,12 +1556,14 @@ function bool AnnouncerLoop(int plynum)
 
 Shows a Marker on a control point. Original code by Isle.
 Argument 1 - The playernumber
-Argument 2 - The data of the CP in string format
-Argument 3 - The number of the CP
-Argument 4 - The screen width
-Argument 5 - The screen height
+Argument 2 - Whether the player is spectating
+Argument 3 - The data1 of the CP in string format
+Argument 4 - The data2 of the CP in string format
+Argument 5 - The number of the CP
+Argument 6 - The screen width
+Argument 7 - The screen height
 -------------------------------------------------------------*/
-function void CPInfoDraw(int plynum, str cpdata, int cpNum, int scrW, int scrH)
+function void CPInfoDraw(int plynum, bool isSpectator, str cpdata1, str cpdata2, int cpNum, int scrW, int scrH)
 {
 	// HUD variables
 	int dist, angle, vang, pitch, x, y;
@@ -1042,119 +1571,132 @@ function void CPInfoDraw(int plynum, str cpdata, int cpNum, int scrW, int scrH)
 	int hudY = 480;
 	int xMarkerOffset = 0;
 	int yMarkerOffset = -16;
-	str spr_back = -1;
-	str spr_col  = -1;
-	str spr_info = -1;
-	str spr_back2 = -1;
-	str spr_col2  = -1;
-	str spr_info2 = -1;
+	int plyteam = GetPlayerInfo(plynum, PLAYERINFO_TEAM);
+	bool HUDYellow = (Timer()%(FONT_FLASHSPEED*2) > FONT_FLASHSPEED);
 	int bobamouunt = 8.0;
 	int bobspeed = 2000;
+	bool capteamregen = GetCVar("dominatrix_capteamregen");
+	int cpmaxhealth = GetCVar("dominatrix_caphealth");
 
 	// CPData variables
 	int cpx;
 	int cpy;
 	int cpz;
+	int cpzbob;
 	int cpteam;
 	int cpstatus;
-	int cphealth;
+	int cpdatalen1 = StrLen(cpdata1);
+	int cpdatalen2 = StrLen(cpdata2);
+
+	// Draw HUD characters
+	int cpback = BFONT_GREYBACK;
+	int cpbacksmall = SFONT_GREYBACK;
+	int cpbackmarker = SFONT_MARKERBACK;
+	int cpinfosmall = SFONT_STARTCHAR;
+	int cpinfomarker = SFONT_STARTCHAR;
+	int cphealth = 0;
+	int cphealthsmall = 0;
+	int cpcolor = CR_UNTRANSLATED;
+
+	// Extract the CP info from CPData1
+	int i=0;
 	int lastspace = 0;
 	int datanum = 0;
-	int cpdatalen = StrLen(cpdata);
-
-	// Extract the CP info from the CPData
-	int i=0;
-	for (; i<cpdatalen; i++)
+	for (; i<cpdatalen1; i++)
 	{
-		if (GetChar(cpdata, i) == ' ')
+		if (GetChar(cpdata1, i) == ' ')
 		{
 			if (datanum == 0)
-				cpx = AToI(StrMid(cpdata, lastspace, i-lastspace));
+				cpx = AToI(StrMid(cpdata1, lastspace, i-lastspace));
 			else if (datanum == 1)
-				cpy = AToI(StrMid(cpdata, lastspace, i-lastspace));
-			else if (datanum == 2)
-				cpz = AToI(StrMid(cpdata, lastspace, i-lastspace))+32.0+FixedMul(sin(Timer()*bobspeed), bobamouunt);
-			else if (datanum == 3)
-				cpteam = AToI(StrMid(cpdata, lastspace, i-lastspace));
-			else if (datanum == 4)
-				cpstatus = AToI(StrMid(cpdata, lastspace, i-lastspace));
+				cpy = AToI(StrMid(cpdata1, lastspace, i-lastspace));
 
 			datanum++;
 			i++;
 			lastspace = i;
 		}
 	}
-	cphealth = floor(AToI(StrMid(cpdata, lastspace, i-lastspace)));
+	cpz = AToI(StrMid(cpdata1, lastspace, i-lastspace));
+	cpzbob = 32.0+FixedMul(sin(Timer()*bobspeed), bobamouunt);
 
-	// Set the marker sprites based on what info we extracted (Warning, code's a mess)
+	// Extract the CP info from CPData2
+	i=0;
+	lastspace = 0;
+	datanum = 0;
+	for (; i<cpdatalen2; i++)
+	{
+		if (GetChar(cpdata2, i) == ' ')
+		{
+			if (datanum == 0)
+				cpteam = AToI(StrMid(cpdata2, lastspace, i-lastspace));
+			else if (datanum == 1)
+				cpstatus = AToI(StrMid(cpdata2, lastspace, i-lastspace));
+
+			datanum++;
+			i++;
+			lastspace = i;
+		}
+	}
+	cphealth = AToI(StrMid(cpdata2, lastspace, i-lastspace));
+
+	// Set the CP's back color to yellow if needed
+	if ((cpstatus == CPSTATUS_STUCKRED || cpstatus == CPSTATUS_STUCKBLUE) && HUDYellow)
+	{
+		cpback = BFONT_YELLOWBACK;
+		cpbacksmall = SFONT_YELLOWBACK;
+		cpbackmarker = SFONT_MARKERYELLOW;
+	}
+
+	// Calculate CP health
+	if (cpteam == TEAM_NONE)
+		cphealthsmall = abs(cphealth/(cpmaxhealth/5));
+	else if (cphealth == cpmaxhealth)
+		cphealthsmall = 5;
+	else
+		cphealthsmall = (10-ceil(absf(FixedDiv(cphealth<<16, (cpmaxhealth/5)<<16))))%10;
+
+	// Set the CP team color
 	if (cphealth > 0)
-	{
-		spr_col = "CPWHBLU";
-		spr_col2 = "SMALBLU";
-	}
+		cpcolor = CR_BLUE;
 	else
-	{
-		spr_col = "CPWHRED";
-		spr_col2 = "SMALRED";
-	}
-	if (abs(cphealth) < 20 && cpteam == TEAM_NONE)
-	{
-		spr_col = -1;
-		spr_col2 = -1;
-	}
-	else
-	{
-		int num;
-		if (cpteam == TEAM_NONE)
-			num = abs(cphealth/20);
-		else if (cpteam == GetPlayerInfo(plynum, PLAYERINFO_TEAM) && (cphealth == 100 || cphealth == -100))
-			num = 5;
-		else if (cpteam == GetPlayerInfo(plynum, PLAYERINFO_TEAM))
-			num = 10-ceil(absf(FixedDiv(cphealth<<16, 25.0)));
-		else
-			num = 10-ceil(absf(FixedDiv(cphealth<<16, 20.0)));
+		cpcolor = CR_RED;
 
-		spr_col = StrParam(s:spr_col, d:num);
-		spr_col2 = StrParam(s:spr_col2, d:num);
-
-		if (num == 10)
+	// Set the extra info
+	if (isSpectator && (cpstatus == CPSTATUS_BLUECAP || cpstatus == CPSTATUS_REDCAP))
+	{
+		cpinfosmall = SFONT_TEAMCAP;
+		cpinfomarker = SFONT_MARKERTEAM;
+	}
+	else if (cpstatus == CPSTATUS_BLUECAP)
+	{
+		if (plyteam == TEAM_BLUE)
 		{
-			spr_col = -1;
-			spr_col2 = -1;
+			cpinfosmall = SFONT_TEAMCAP;
+			cpinfomarker = SFONT_MARKERTEAM;
 		}
-	}
-
-	// Set the marker extra info based on what we extracted
-	if (cpstatus == CPSTATUS_BLUECAP)
-	{
-		if (GetPlayerInfo(plynum, PLAYERINFO_TEAM) == TEAM_BLUE)
+		else if (plyteam == TEAM_RED)
 		{
-			spr_info = "CPWHCAPN";
-			spr_info2 = "SMALCAPN";
-		}
-		else if (GetPlayerInfo(plynum, PLAYERINFO_TEAM) == TEAM_RED)
-		{
-			spr_info = "CPWHWARN";
-			spr_info2 = "CPWHWARN";
+			cpinfosmall = SFONT_WARNING;
+			cpinfomarker = SFONT_MARKERWARN;
 		}
 	}
 	else if (cpstatus == CPSTATUS_REDCAP)
 	{
-		if (GetPlayerInfo(plynum, PLAYERINFO_TEAM) == TEAM_BLUE)
+		if (plyteam == TEAM_BLUE)
 		{
-			spr_info = "CPWHWARN";
-			spr_info2 = "CPWHWARN";
+			cpinfosmall = SFONT_WARNING;
+			cpinfomarker = SFONT_MARKERWARN;
 		}
-		else if (GetPlayerInfo(plynum, PLAYERINFO_TEAM) == TEAM_RED)
+		else if (plyteam == TEAM_RED)
 		{
-			spr_info = "CPWHCAPN";
-			spr_info2 = "SMALCAPN";
+			cpinfosmall = SFONT_TEAMCAP;
+			cpinfomarker = SFONT_MARKERTEAM;
 		}
 	}
 
 	// Calculate things for marker placement
 	SetHudSize(hudX, hudY, false);
-	if (GetUserCVar(plynum, "dominatrix_markers"))
+	if (!GetClientCVar(plynum, "dominatrix_disablemarkers"))
 	{
 		x = cpx - GetActorX(0);
 		y = cpy - GetActorY(0);
@@ -1168,7 +1710,7 @@ function void CPInfoDraw(int plynum, str cpdata, int cpNum, int scrW, int scrH)
 		{
 			if (GetActorPitch(0) >= -0.25 && GetActorPitch(0) <= 0.25)
 			{
-				pitch = VectorAngle(dist, cpz - (GetActorZ(0) + 41.0));
+				pitch = VectorAngle(dist, (cpz+cpzbob) - (GetActorZ(0) + 41.0));
 				pitch = (pitch + GetActorPitch(0) + 1.0) % 1.0;
 
 				if ((hudX/2) * sin(angle) != 0 && cos(angle) != 0 && (hudX/2) * sin(pitch) != 0 && cos(pitch) != 0) //	Fixes divide by zero
@@ -1179,65 +1721,86 @@ function void CPInfoDraw(int plynum, str cpdata, int cpNum, int scrW, int scrH)
 					x+=xMarkerOffset;
 					y+=yMarkerOffset;
 
+					SetFont("HUDSMALL");
+
 					// Draw the background
-					if (cpstatus == CPSTATUS_STUCKRED || cpstatus == CPSTATUS_STUCKBLUE)
-						spr_back = "CPWHYELW";
-					else
-						spr_back = "CPWHGREY";
-					SetFont(spr_back);
-					HudMessage(s:"A"; HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_CPBACK+cpNum, CR_WHITE, (x << 16), (y << 16), 1.0);
+					HudMessage(c:cpbackmarker; HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_CPBACK+cpNum, CR_UNTRANSLATED, (x << 16), (y << 16), 1.0);
 
 					// Draw the color
-					SetFont(spr_col);
-					if (spr_col == -1)
-						HudMessage(s:""; HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_CPCOLR+cpNum, CR_WHITE, (x << 16), (y << 16), 1.0);
-					else
-						HudMessage(s:"A"; HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_CPCOLR+cpNum, CR_WHITE, (x << 16), (y << 16), 1.0);
+					HudMessage(c:cphealthsmall+SFONT_MARKERSTART; HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_CPCOLR+cpNum, cpcolor, (x << 16), (y << 16), 1.0);
 
 					// Draw extra CP status info
-					SetFont(spr_info);
-					if (cpstatus != CPSTATUS_IDLE && (cpstatus == CPSTATUS_BLUECAP || cpstatus == CPSTATUS_REDCAP))
-						HudMessage(s:"A"; HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_CPINFO+cpNum, CR_WHITE, (x << 16), (y << 16), 1.0);
-					else
-						HudMessage(s:""; HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_CPINFO+cpNum, CR_WHITE, (x << 16), (y << 16), 1.0);
+					HudMessage(c:cpinfomarker; HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_CPINFO+cpNum, CR_UNTRANSLATED, (x << 16), (y << 16), 1.0);
+				}
+			}
+		}
+
+		// Draw the CP being captured above the STATUSBAR
+		if (!isSpectator)
+		{
+			if (GetCVar("dominatrix_capbelow") || (!GetCVar("dominatrix_capbelow") && GetActorZ(0)+CAPBELOW_HEIGHT >= cpz))
+			{
+				if ((dist>>16) < GetCVar("dominatrix_capdistance") && ((!capteamregen && plyteam != cpteam) || (capteamregen && abs(cphealth) < cpmaxhealth) || cphealth == 0))
+				{
+					int cphpdiv = abs((cphealth*42)/cpmaxhealth);
+					SetHudSize(scrW, scrH, false);
+					SetFont("HUDLARGE");
+
+					// Draw the back of the CP HUD
+					HudMessage(c:cpback; HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_CPCAP2, CR_UNTRANSLATED, (scrW/2) << 16, (scrH << 16)+0.2, 1.0);
+					HudMessage(c:BFONT_STARTCHAR+cphpdiv; HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_CPCAP1, cpcolor, (scrW/2) << 16, (scrH << 16)+0.2, 1.0);
 				}
 			}
 		}
 	}
 
 	// Draw the CP's on the top of the screen
-	if (GetUserCVar(plynum, "dominatrix_showallcps"))
+	if (!GetClientCVar(plynum, "dominatrix_disableshowallcps"))
 	{
 		// Calculate the X and Y pos of the CP icon
 		int maxW;
-		int cpHUDY = FixedMul(24.0, floor(FixedDiv(cpNum<<16, CPPERLINEHUD<<16))<<16)+1.1;
-		if (floor(FixedDiv(cpNum<<16, CPPERLINEHUD<<16)) == floor(FixedDiv(GetCVar("__clientsync_cpcount")<<16, CPPERLINEHUD<<16)))
-			maxW = 24*((GetCVar("__clientsync_cpcount")%CPPERLINEHUD)-1);
+		int cpHUDY = FixedMul(24.0, floor(FixedDiv(cpNum<<16, CPPERLINEHUD<<16))<<16)-4.0+0.1;
+		if (floor(FixedDiv(cpNum<<16, CPPERLINEHUD<<16)) == floor(FixedDiv(GetGlobalCVar("__clientsync_cpcount")<<16, CPPERLINEHUD<<16)))
+			maxW = 24*((GetGlobalCVar("__clientsync_cpcount")%CPPERLINEHUD)-1);
 		else
 			maxW = 24*(CPPERLINEHUD-1);
 		SetHudSize(scrW, scrH, false);
+		SetFont("HUDSMALL");
 
-		// Draw the background
-		if (cpstatus == CPSTATUS_STUCKRED || cpstatus == CPSTATUS_STUCKBLUE)
-			spr_back2 = "SMALYELW";
-		else
-			spr_back2 = "SMALGREY";
-		SetFont(spr_back2);
-		HudMessage(s:"A"; HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_CPBACKSM+cpNum, CR_WHITE, (scrW/2-maxW/2+(cpNum%CPPERLINEHUD)*24) << 16, cpHUDY, 1.0);
+		// Draw the back
+		HudMessage(c:cpbacksmall; HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_CPBACKSM+cpNum, CR_UNTRANSLATED, (scrW/2-maxW/2+(cpNum%CPPERLINEHUD)*24) << 16, cpHUDY, 1.0);
 
 		// Draw the color
-		SetFont(spr_col2);
-		if (spr_col2 == -1)
-			HudMessage(s:""; HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_CPCOLRSM+cpNum, CR_WHITE, 0.0, 0.0, 1.0);
-		else
-			HudMessage(s:"A"; HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_CPCOLRSM+cpNum, CR_WHITE, (scrW/2-maxW/2+(cpNum%CPPERLINEHUD)*24) << 16, cpHUDY, 1.0);
+		HudMessage(c:cphealthsmall+SFONT_STARTCHAR; HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_CPCOLRSM+cpNum, cpcolor, (scrW/2-maxW/2+(cpNum%CPPERLINEHUD)*24) << 16, cpHUDY, 1.0);
 
 		// Draw the extra info
-		SetFont(spr_info2);
-		if (spr_info2 == -1)
-			HudMessage(s:""; HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_CPINFOSM+cpNum, CR_WHITE, 0.0, 0.1, 1.0);
-		else
-			HudMessage(s:"A"; HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_CPINFOSM+cpNum, CR_WHITE, (scrW/2-maxW/2+(cpNum%CPPERLINEHUD)*24) << 16, cpHUDY, 1.0);
+		HudMessage(c:cpinfosmall; HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_CPINFOSM+cpNum, CR_UNTRANSLATED, (scrW/2-maxW/2+(cpNum%CPPERLINEHUD)*24) << 16, cpHUDY, 1.0);
+	}
+}
+
+/*-------------------------------------------------------------
+                           HUDClear
+
+Clears all the HUDMessages
+-------------------------------------------------------------*/
+function void HUDClear(void)
+{
+	HudMessage(s:""; HUDMSG_PLAIN, MSGID_HUDSTATE, CR_WHITE, 0.0, 0.0, 0.1);
+	HudMessage(s:""; HUDMSG_PLAIN, MSGID_HUDREDS, CR_WHITE, 0.0, 0.0, 0.1);
+	HudMessage(s:""; HUDMSG_PLAIN, MSGID_HUDBLUES, CR_WHITE, 0.0, 0.0, 0.1);
+	HudMessage(s:""; HUDMSG_PLAIN, MSGID_HUDTIME, CR_WHITE, 0.0, 0.0, 0.1);
+	HudMessage(s:""; HUDMSG_PLAIN, MSGID_HUDTIME2, CR_WHITE, 0.0, 0.0, 0.1);
+	HudMessage(s:""; HUDMSG_PLAIN, MSGID_CPCAP1, CR_WHITE, 0.0, 0.0, 0.1);
+	HudMessage(s:""; HUDMSG_PLAIN, MSGID_CPCAP2, CR_WHITE, 0.0, 0.0, 0.1);
+	HudMessage(s:""; HUDMSG_PLAIN, MSGID_CPINFO, CR_WHITE, 0.0, 0.0, 0.1);
+
+	for (int i=0; i<MAXCONTROLPOINTS+1; i++)
+	{
+		HudMessage(s:""; HUDMSG_PLAIN, MSGID_CPCOLR+i, CR_WHITE, 0.0, 0.0, 0.1);
+		HudMessage(s:""; HUDMSG_PLAIN, MSGID_CPBACK+i, CR_WHITE, 0.0, 0.0, 0.1);
+		HudMessage(s:""; HUDMSG_PLAIN, MSGID_CPINFOSM+i, CR_WHITE, 0.0, 0.0, 0.1);
+		HudMessage(s:""; HUDMSG_PLAIN, MSGID_CPCOLRSM+i, CR_WHITE, 0.0, 0.0, 0.1);
+		HudMessage(s:""; HUDMSG_PLAIN, MSGID_CPBACKSM+i, CR_WHITE, 0.0, 0.0, 0.1);
 	}
 }
 
@@ -1265,6 +1828,73 @@ function void SetGlobalCVarString(str cvar, str value)
 {
     if (GetCVarString(cvar) != value)
         SetCVarString(cvar, value);
+}
+
+/*-------------------------------------------------------------
+						 GetGlobalCVar
+
+A multi source port compatible version of GetCvar for my
+networking system.
+Argument 0 - The CVar to get the value of
+-------------------------------------------------------------*/
+function int GetGlobalCVar(str cvar)
+{
+	if (!IsCompatibilityMode("zdaemon"))
+		return GetCvar(cvar);
+
+	// Messy but required for ZDaemon compatibility
+	int value = 0;
+	if (!StrCmp(cvar, "__clientsync_time")) value = global_time;
+	else if (!StrCmp(cvar, "__clientsync_redscore")) value = global_scoreteamred;
+	else if (!StrCmp(cvar, "__clientsync_bluescore")) value = global_scoreteamblue;
+	else if (!StrCmp(cvar, "__clientsync_gamestate")) value = global_gamestate;
+	else if (!StrCmp(cvar, "__clientsync_cpcount")) value = global_cpcount;
+	else if (!StrCmp(cvar, "__clientsync_announce")) value = global_announcement;
+	else if (!StrCmp(cvar, "__clientsync_gameend")) value = global_gameend;
+	else if (!StrCmp(cvar, "__clientsync_ddomtime")) value = global_ddomtime;
+	return value;
+}
+
+/*-------------------------------------------------------------
+					  GetGlobalCVarString
+
+A multi source port compatible version of GetCvarString for my
+networking system.
+Argument 0 - The CVar to get the value of
+-------------------------------------------------------------*/
+function str GetGlobalCVarString(str cvar)
+{
+	if (!IsCompatibilityMode("zdaemon"))
+		return GetCvarString(cvar);
+
+	// Pack the control point info into a string
+	str cpinfo = "";
+	int i;
+	if (!StrCmp(cvar, "__clientsync_cpinfo1"))
+	{
+		for (i=0; i<MAXCONTROLPOINTS; i++)
+		{
+			if (global_controlpoints[i][CPDATA_TID] != 0)
+			{
+				cpinfo = StrParam(s:cpinfo, d:global_controlpoints[i][CPDATA_X], s:" ",
+										    d:global_controlpoints[i][CPDATA_Y], s:" ",
+											d:global_controlpoints[i][CPDATA_Z], c:'\n');
+			}
+		}
+	}
+	else
+	{
+		for (i=0; i<MAXCONTROLPOINTS; i++)
+		{
+			if (global_controlpoints[i][CPDATA_TID] != 0)
+			{
+				cpinfo = StrParam(s:cpinfo, d:global_controlpoints[i][CPDATA_TEAM], s:" ",
+											d:global_controlpoints[i][CPDATA_STATUS], s:" ",
+											d:global_controlpoints[i][CPDATA_CAPAMOUNT], c:'\n');
+			}
+		}
+	}
+	return cpinfo;
 }
 
 /*-------------------------------------------------------------
@@ -1344,7 +1974,6 @@ function int floor(int fixedNumber)
 {
 	return (fixedNumber & 0xFFFF0000) >> 16;
 }
-
 
 /*-------------------------------------------------------------
 							 ceil
