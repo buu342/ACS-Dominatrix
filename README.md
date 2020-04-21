@@ -1,42 +1,47 @@
 ![](https://i.imgur.com/kxijgwR.gif)![](https://i.imgur.com/mancHEJ.png)
 ---
-A highly configurable domination gamemode replacement for Zandronum, ZDoom, and ZDaemon. ZDaemon compatiblity is not yet finished, as the DECORATE assets need to be converted to DeHackEd.
+A highly configurable domination gamemode replacement for Zandronum, (G)ZDoom, and ZDaemon.
 
 This WAD requested by the MDF community.<br/><br/>
 
 ### How to use
   **1)** Include this WAD in your server's wad list.<br/>
-  **2)** Write a script to spawn command posts onto the map. Example script:
+  **2)** Write a script to spawn command posts onto the map. Use the format `ACS_NamedExecuteAlways("Dominatrix_AddControlPoint", 0, x, y, z);`, where `x, y, z` are the **FIXED POINT** coordinates to place the command post. Example script:
 ```c
 Script 1 OPEN
 {
-	SpawnForced("ControlPoint_Grey", 0.0, 0.0, 8.0);
-	SpawnForced("ControlPoint_Blue", -416.0, -416.0, 8.0);
-	SpawnForced("ControlPoint_Red", 416.0, -416.0, 8.0);
+    ACS_NamedExecuteAlways("Dominatrix_AddControlPoint", 0, 0.0, 0.0, 8.0);
+    ACS_NamedExecuteAlways("Dominatrix_AddControlPointBlue", 0, -416.0, -416.0, 8.0);
+    ACS_NamedExecuteAlways("Dominatrix_AddControlPointRed", 0, 416.0, -416.0, 8.0);
 }
 ```
-  **3)** Ensure the server is running "Team Deathmatch" as the selected gamemode. <br/>
-  **4)** Ensure the score limit and time limit is both set to 0 to prevent conflicts with Dominatrix. I would also recommend disabling the announcer as this gamemode comes with its own. 
+  **3)** Be sure to include the WAD that executes that script along with the server's files.<br/>
+  **4)** Ensure the server is running "Team Deathmatch" as the selected gamemode.<br/>
+  **5)** Ensure the default gamemode's score limit and time limit are both set to 0 to prevent conflicts with Dominatrix. I would also recommend disabling the announcer as this gamemode comes with its own. 
+  **6)** If using ZDaemon, include Dominatrix.cfg in your server so that all Dominatrix related CVars are set. Also, be aware that in ZDaemon, CVars need to have 1/0 as opposed to true/false, and that you **cannot** use decimal numbers!  
 <br/><br/>
 
-### How to compile the ACS
+### How to compile the Dominatrix ACS source
   **1)** Go to your Zandronum ACC folder (For instance, in Doom Builder\Compilers\Zandronum).<br/>
   **2)** Place [zdaemon.acs](http://downloads.zdaemon.org/zdaemon.acs) in that folder.<br/>
   **3)** Edit acc.cfg in the same folder and add `zdaemon = "zdaemon.acs";` to the `zdoom_acc {...}` section.<br/>
-  **4)** Compile, and place the binary between the A_START and A_END lumps, ensuring the lump itself is called DOMNATRX.
+  **4)** Modify zspecial.acs to include `-130:SetDeadSpectator(2),` and `-131:SetActivatorToPlayer(1),`<br/>
+  **5)** Compile, and place the binary between the A_START and A_END lumps, ensuring the lump itself is called DOMNATRX.
 <br/><br/>
 
 ### Serverside configuration
 ```c
-dominatrix_compatibility  = "Zandronum"; // "Zandronum", "ZDoom, or "ZDaemon"
-dominatrix_timemax        = 300;         // How much time for a game to end in seconds? (0 for infinite time)
-dominatrix_scoremax       = 250;         // How many points for the game to end? (0 for infinite score)
+dominatrix_compatibility = "Zandronum"; // "Zandronum", "ZDoom, or "ZDaemon"
+dominatrix_timemax       = 300;         // How much time for a game to end in seconds? (0 for infinite time)
+dominatrix_scoremax      = 250;         // How many points for the game to end? (0 for infinite score)
+dominatrix_roundendtime  = 3;           // How many seconds does the game display the winner for?	
 
-dominatrix_capspeed     = 1.0;   // How much health a control point loses per tick of capture
-dominatrix_capdistance  = 256.0; // How far someone needs to be to capture the control point
+dominatrix_caphealth    = 100;   // The maximum health of a control point.
+dominatrix_capdistance  = 256;   // How far someone needs to be to capture the control point
 dominatrix_capteamregen = false; // If the control point lost some health, can it be recovered by a team member?
 dominatrix_capregentime = 0.0;   // How many seconds it takes for a control point to automatically regenerate 1 hp (0 for none)
 dominatrix_capmultiple  = false; // Will a control point lose health faster if more people are capturing it?
+dominatrix_capbelow     = true;  // Allow capturing if the player is below the control point?
 
 dominatrix_scorefrag      = false; // Do you get points for fragging players?
 dominatrix_scoreperfrag   = 1;     // How many points to you get for fragging players
@@ -48,22 +53,44 @@ dominatrix_scorelimitpercp     = 0; // Increase the max score by this number mul
 dominatrix_scorelimitperplayer = 0; // Increase the max score by this number multiplied by the number of players.
 dominatrix_timelimitpercp      = 0; // Increase the max time by this number multiplied by the number of CPs.
 dominatrix_timelimitperplayer  = 0; // Increase the max time by this number multiplied by the number of players.
+
+dominatrix_ddommode         = false; // Use Double Domination mode?
+dominatrix_ddomscoretime    = 10;    // How much time do teams need to hold the CP's to score in Double Domination?
+dominatrix_ddomresetonscore = true;  // Do all control points reset back to grey when a team scores?
 ```
 <br/>
 
 
 ### Clientside configuration
 ```c
-dominatrix_announcer     = true; // Use the announcer voice
-dominatrix_markers       = true; // Show markers on the control points
-dominatrix_showallcps    = true; // Show all CP's below the timelimit
-dominatrix_hudscale      = true; // Scale the HUD
-dominatrix_hudwidescreen = true; // Use a widescreen HUD
+dominatrix_disableannouncer     = false; // (Don't) Use the announcer?
+dominatrix_disablemarkers       = false; // (Don't) Show markers on the CP's?
+dominatrix_disableshowallcps    = false; // (Don't) Show all the CP's on the top of the screen?
+dominatrix_disablehudscale      = false; // (Don't) Scale the HUD to 640x480?
+dominatrix_disablehudwidescreen = false; // (Don't) Use a 16:9 ratio on the HUD?
 ```
 <br/>
 
+### Credits
+Credits are provided within the WAD as a special lump.
+<br/><br/>
 
 ### Changelog
+**Version 1.2**
+* +[Added proper ZDaemon support](https://github.com/buu342/ACS-Dominatrix/issues/1)
+* +[Added a Double Domination variant](https://github.com/buu342/ACS-Dominatrix/issues/18)
+* +[Made a custom HUD for spectators (Only working in Zandronum)](https://github.com/buu342/ACS-Dominatrix/issues/15)
+* +[Implemented an announcement stack](https://github.com/buu342/ACS-Dominatrix/issues/3)
+* +[Added a CVar to prevent players from capping a CP from below](https://github.com/buu342/ACS-Dominatrix/issues/28)
+* \*[Changed blue team's score to be lighter to improve readability](https://github.com/buu342/ACS-Dominatrix/issues/20)
+* \*[Reduced traffic usage by only networking time once](https://github.com/buu342/ACS-Dominatrix/issues/19)
+* \*[Reduced traffic usage by separating CP coordinates from __clientsync_cpinfo](https://github.com/buu342/ACS-Dominatrix/issues/21)
+* \*[Made a new, custom announcer (Thanks a lot RottKing!)](https://github.com/buu342/ACS-Dominatrix/issues/9)
+* \*[Fixed SBARINFO jitter by changing it to ACS](https://github.com/buu342/ACS-Dominatrix/issues/2)
+* \*[Made it so that the "official" score gets set at the end of the game](https://github.com/buu342/ACS-Dominatrix/issues/22)
+* \*Negated all clientside CVar's by default, in order to allow for ZDaemon compatibility. 
+
+
 **Version 1.1**
 * +[Game now shows why it ended](https://github.com/buu342/ACS-Dominatrix/issues/14)
 * +[Created a credits lump](https://github.com/buu342/ACS-Dominatrix/issues/6)
