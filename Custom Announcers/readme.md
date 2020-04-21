@@ -1,1 +1,2 @@
-Hello
+In this folder is a set of custom announcers. These can be made by me, or can be submitted by other people via a pull request. 
+To use an custom announcer, you must load the pk3 as the last file in your source port. You cannot put this in the "Skins" folder sadly as those get loaded first, so they'll get replaced by the default announcer. I wish there was a better way of doing this, but until I find one, this is the method that must be taken.
