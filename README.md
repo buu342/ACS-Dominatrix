@@ -18,7 +18,8 @@ Script 1 OPEN
   **3)** Compile the ACS, placing it between A_START and A_END lumps. Ensure it is the same name as NAME in your library.<br/>
   **4)** Create a new lump called LOADACS, and inside write the name of the compiled ACS file (should be NAME of your library).<br/>
   **5)** Be sure to include the WAD that executes that script along with the server's files.<br/>
-Examples are provided in the "Injection WADs" folder within this repository.<br/><br/>
+Examples are provided in the "Injection WADs" folder within this repository.<br/>
+If you prefer, you can use [ZDaemon's Patchinfo method](http://master.zdaemon.org/patchinfo.txt), however this will result in your map only being compatible in ZDaemon, which defeats the purpose of the multi-sourceport compatibility.<br/><br/>
   
 ### How to use on a server
   **1)** Include the latest version of the Dominatrix WAD in your server's wad list, as well as the map pack you want to use and the injection script to place CP's in said map pack.<br/>
