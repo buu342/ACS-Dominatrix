@@ -14,7 +14,7 @@ Script 1 OPEN
     ACS_NamedExecuteAlways("Dominatrix_AddControlPointRed", 0, 416.0, -416.0, 8.0);
 }
 ```
-  **2)** Put `#library "NAME"` at the top of the ACS script, where name is a unique name **less than or equal to 8 characters**<br/>
+  **2)** Put `#library "NAME"` at the top of the ACS script, where NAME is a unique name **less than or equal to 8 characters**<br/>
   **3)** Compile the ACS, placing it between A_START and A_END lumps. Ensure it is the same name as NAME in your library.<br/>
   **4)** Create a new lump called LOADACS, and inside write the name of the compiled ACS file (should be NAME of your library).<br/>
   **5)** Be sure to include the WAD that executes that script along with the server's files.<br/>
