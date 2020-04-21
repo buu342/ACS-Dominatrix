@@ -28,7 +28,8 @@ ControlPoint_Grey 10000 (SpawnID 213)
 ControlPoint_Blue 10001 (SpawnID 214)
 ControlPoint_Red  10002 (SpawnID 215)
 ```
-  
+<br/>
+
 ### How to use on a server
   **1)** Include the latest version of the Dominatrix WAD in your server's wad list, as well as the map pack you want to use and the injection script to place CP's in said map pack.<br/>
   **2)** Ensure the server is running "Team Deathmatch" as the selected gamemode.<br/>
