@@ -19,7 +19,15 @@ Script 1 OPEN
   **4)** Create a new lump called LOADACS, and inside write the name of the compiled ACS file (should be NAME of your library).<br/>
   **5)** Be sure to include the WAD that executes that script along with the server's files.<br/>
 Examples are provided in the "Injection WADs" folder within this repository.<br/>
-If you prefer, you can use [ZDaemon's Patchinfo method](http://master.zdaemon.org/patchinfo.txt), however this will result in your map only being compatible in ZDaemon, which defeats the purpose of the multi-sourceport compatibility.<br/><br/>
+If you prefer, you can use [ZDaemon's Patchinfo method](http://master.zdaemon.org/patchinfo.txt), however this will result in your injection WAD only being compatible in ZDaemon, which defeats the purpose of the multi-sourceport compatibility.<br/><br/>
+  
+### How to place control points on your custom maps
+You can either use the method outlined above OR place the control point entities directly on the map. The following actors are available:
+```c
+ControlPoint_Grey 10000 (SpawnID 213)
+ControlPoint_Blue 10001 (SpawnID 214)
+ControlPoint_Red  10002 (SpawnID 215)
+```
   
 ### How to use on a server
   **1)** Include the latest version of the Dominatrix WAD in your server's wad list, as well as the map pack you want to use and the injection script to place CP's in said map pack.<br/>
