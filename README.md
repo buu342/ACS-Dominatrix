@@ -17,7 +17,7 @@ Script 1 OPEN
 ```
   **3)** Be sure to include the WAD that executes that script along with the server's files.<br/>
   **4)** Ensure the server is running "Team Deathmatch" as the selected gamemode.<br/>
-  **5)** Ensure the default gamemode's score limit and time limit are both set to 0 to prevent conflicts with Dominatrix. I would also recommend disabling the announcer as this gamemode comes with its own. 
+  **5)** Ensure the default gamemode's score limit and time limit are both set to 0 to prevent conflicts with Dominatrix. I would also recommend disabling the announcer as this gamemode comes with its own. <br/>
   **6)** If using ZDaemon, include Dominatrix.cfg in your server so that all Dominatrix related CVars are set. Also, be aware that in ZDaemon, CVars need to have 1/0 as opposed to true/false, and that you **cannot** use decimal numbers!  
 <br/><br/>
 
