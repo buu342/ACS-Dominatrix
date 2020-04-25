@@ -1,6 +1,6 @@
 ![](https://i.imgur.com/kxijgwR.gif)![](https://i.imgur.com/mancHEJ.png)
 ---
-A highly configurable domination gamemode replacement for Zandronum, (G)ZDoom, and ZDaemon.
+A highly configurable domination gamemode replacement for Zandronum, ZDaemon, and (G)ZDoom.
 
 This WAD requested by the MDF community.<br/><br/>
 
