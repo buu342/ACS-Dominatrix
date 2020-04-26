@@ -8,29 +8,31 @@
 ===================================================================================================*/
 
 #define DUMMY ""        // Needed to prevent text bugs from ocurring
-#define VERSION "1.2"
+#define VERSION "1.3"
 #define SECOND 35
 
 #define MAXPLAYERS 64       // No need to change
 #define MAXCONTROLPOINTS 10 // Maximum number of Control points
+#define MAXANNOUNCEMENTS 3	// Maxumum number of announcements at once
 #define CPPERLINEHUD 10		// Maximum number of CP's per line in your HUD
 #define CAPBELOW_HEIGHT 8.0 // Cap below (CVar) tolerance height
 
 // Macros for Message ID's
 #define MSGID_CONSOLE  -1
-#define MSGID_HUDSTATE 5
-#define MSGID_HUDREDS  6
-#define MSGID_HUDBLUES 7
-#define MSGID_HUDTIME  8
-#define MSGID_HUDTIME2 9
-#define MSGID_CPCAP1   10
-#define MSGID_CPCAP2   11
-#define MSGID_CPINFO   21
-#define MSGID_CPCOLR   21+MAXCONTROLPOINTS
-#define MSGID_CPBACK   21+MAXCONTROLPOINTS*2
-#define MSGID_CPINFOSM 21+MAXCONTROLPOINTS*3
-#define MSGID_CPCOLRSM 21+MAXCONTROLPOINTS*4
-#define MSGID_CPBACKSM 21+MAXCONTROLPOINTS*5
+#define MSGID_ANNOUNCE 5
+#define MSGID_HUDSTATE 6
+#define MSGID_HUDREDS  7
+#define MSGID_HUDBLUES 8
+#define MSGID_HUDTIME  9
+#define MSGID_HUDTIME2 10
+#define MSGID_CPCAP1   11
+#define MSGID_CPCAP2   12
+#define MSGID_CPINFO   21 // Takes up MAXCONTROLPOINTS slots
+#define MSGID_CPCOLR   21+MAXCONTROLPOINTS // Takes up MAXCONTROLPOINTS slots
+#define MSGID_CPBACK   21+MAXCONTROLPOINTS*2 // Takes up MAXCONTROLPOINTS slots
+#define MSGID_CPINFOSM 21+MAXCONTROLPOINTS*3 // Takes up MAXCONTROLPOINTS slots
+#define MSGID_CPCOLRSM 21+MAXCONTROLPOINTS*4 // Takes up MAXCONTROLPOINTS slots
+#define MSGID_CPBACKSM 21+MAXCONTROLPOINTS*5 // Takes up MAXCONTROLPOINTS slots
 
 // Macros for translations
 #define TRANSLATION_GREY  1
@@ -45,7 +47,7 @@
 //#define TEAM_RED 1  // Already defined by ZDoom
 
 // Macros for Thing ID's
-#define TID_PLAYER    1337
+#define TID_PLAYER    1000
 #define TID_CP        2337
 #define TID_CPEYE     TID_CP+MAXCONTROLPOINTS
 #define TID_DELETE    3337
@@ -148,8 +150,8 @@ int global_scoreteamred;
 int global_time;
 int global_ddomtime;
 int global_announcement;
+int global_announcements[MAXANNOUNCEMENTS];
 bool global_cpslotmutex;
-bool global_zdaemoncompat;
 
 
 /*===================================================================================================
@@ -168,9 +170,10 @@ Script "Dominatrix_Initialize" OPEN
     global_scoreteamblue = 0;
 	global_time = 0;
 	global_ddomtime = 0;
-	global_announcement = ANNOUNCE_EMPTY;
 	global_gameend = END_NONE;
-	global_zdaemoncompat = false;
+	global_announcement = ANNOUNCE_EMPTY;
+	for (int i=0; i<MAXANNOUNCEMENTS; i++)
+		global_announcements[i] = ANNOUNCE_EMPTY;
 
     global_gamestate = GAME_RUNNING;
 
@@ -191,11 +194,13 @@ Script "Dominatrix_PlayerEnter" ENTER
     Thing_ChangeTID(0, TID_PLAYER+PlayerNumber());
     global_players[PlayerNumber()] = TID_PLAYER+PlayerNumber();
 
-	// Create the HUD (Zandronum's HUD auto starts)
+	// Create the HUD
 	if (IsCompatibilityMode("zdaemon"))
 		ACS_NamedExecuteAlways("Dominatrix_HUD_ZDaemon", 0);
 	else if (IsCompatibilityMode("zdoom"))
 		ACS_NamedExecuteAlways("Dominatrix_HUD_ZDoom", 0);
+	else if (IsCompatibilityMode("zandronum") && !PlayerIsSpectator(PlayerNumber()))
+		ACS_NamedExecuteAlways("Dominatrix_HUD_Zandronum", 0);
 }
 
 // Let people know this server is using Dominatrix (Zandronum Only)
@@ -247,7 +252,10 @@ Script "Dominatrix_PlayerLeave" (int plynum) DISCONNECT
 
 	// Zandronum kills clientside ACS upon moving to spectator. We need this to reenable the HUD...
 	if (IsCompatibilityMode("zandronum") && PlayerIsSpectator(plynum))
+	{
+		ACS_NamedTerminate("Dominatrix_HUD_Zandronum", 0);
 		ACS_NamedExecuteAlways("Dominatrix_HUD_Zandronum", 0);
+	}
 }
 
 // Main gamemode logic thread
@@ -460,6 +468,9 @@ Script "Dominatrix_HandleScore" (void)
 	// Game logic
     while (true)
     {
+		int dynamicScoreExtra = GetCVar("dominatrix_scorelimitpercp")*global_cpcount + GetCVar("dominatrix_scorelimitperplayer")*PlayerCount();
+		int maxscore = GetCVar("dominatrix_scoremax")+dynamicScoreExtra;
+
         timecur = Timer();
 
         // Add score after some time
@@ -481,12 +492,14 @@ Script "Dominatrix_HandleScore" (void)
 				if (global_cpcountblue == global_cpcount)
 				{
 					global_scoreteamblue++;
-					global_announcement = ANNOUNCE_BLUESCORE;
+					if (global_scoreteamblue > 3)
+						AddAnnouncement(ANNOUNCE_BLUESCORE);
 				}
 				else if (global_cpcountred == global_cpcount)
 				{
 					global_scoreteamred++;
-					global_announcement = ANNOUNCE_REDSCORE;
+					if (global_scoreteamred > 3)
+						AddAnnouncement(ANNOUNCE_REDSCORE);
 				}
 
 				// Reset all the CP's back to grey if the ConVar is enabled
@@ -530,9 +543,6 @@ Script "Dominatrix_HandleScore" (void)
         // Handle winning
         if (GetCVar("dominatrix_scoremax") != 0 || GetCVar("dominatrix_timemax") != 0)
         {
-			int dynamicScoreExtra = GetCVar("dominatrix_scorelimitpercp")*global_cpcount + GetCVar("dominatrix_scorelimitperplayer")*PlayerCount();
-			int maxscore = GetCVar("dominatrix_scoremax")+dynamicScoreExtra;
-
             bool timeup  = (timetoend-timecur) <= 0;
             bool scoreup = maxscore <= global_scoreteamblue || maxscore <= global_scoreteamred;
 
@@ -546,19 +556,19 @@ Script "Dominatrix_HandleScore" (void)
 				{
 					tally = "Blue team wins!\n";
                     global_gamestate = GAME_BLUEWIN;
-					global_announcement = ANNOUNCE_BLUEWIN;
+					AddAnnouncement(ANNOUNCE_BLUEWIN);
 				}
                 else if ((global_scoreteamred >= maxscore && global_scoreteamblue < maxscore) || global_scoreteamblue < global_scoreteamred)
 				{
 					tally = "Red team wins!\n";
                     global_gamestate = GAME_REDWIN;
-					global_announcement = ANNOUNCE_REDWIN;
+					AddAnnouncement(ANNOUNCE_REDWIN);
 				}
                 else
 				{
 					tally = "No team wins!\n";
                     global_gamestate = GAME_DRAWWIN;
-					global_announcement = ANNOUNCE_DRAWGAME;
+					AddAnnouncement(ANNOUNCE_DRAWGAME);
 				}
 
 				// State why the game ended
@@ -594,38 +604,38 @@ Script "Dominatrix_HandleScore" (void)
 
 			// Handle announcer time/score
 			if (GetCVar("dominatrix_timemax") > 300 && timetoend-timecur == 300*SECOND)
-				global_announcement = ANNOUNCE_5MINUTES;
+				AddAnnouncement(ANNOUNCE_5MINUTES);
 			if (GetCVar("dominatrix_timemax") > 60 && timetoend-timecur == 60*SECOND)
-				global_announcement = ANNOUNCE_1MINUTE;
+				AddAnnouncement(ANNOUNCE_1MINUTE);
 			if (!announced3P && GetCVar("dominatrix_ddommode"))
 			{
-				if (GetCVar("dominatrix_scoremax") > 3 && ((GetCVar("dominatrix_scoremax")-global_scoreteamblue == 3) || (GetCVar("dominatrix_scoremax")-global_scoreteamred == 3)))
+				if (maxscore > 3 && ((maxscore-global_scoreteamblue == 3) || (maxscore-global_scoreteamred == 3)))
 				{
-					global_announcement = ANNOUNCE_3POINTS;
+					AddAnnouncement(ANNOUNCE_3POINTS);
 					announced3P = true;
 				}
 			}
 			if (!announced2P && GetCVar("dominatrix_ddommode"))
 			{
-				if (GetCVar("dominatrix_scoremax") > 2 && ((GetCVar("dominatrix_scoremax")-global_scoreteamblue == 2) || (GetCVar("dominatrix_scoremax")-global_scoreteamred == 2)))
+				if (maxscore > 2 && ((maxscore-global_scoreteamblue == 2) || (maxscore-global_scoreteamred == 2)))
 				{
-					global_announcement = ANNOUNCE_2POINTS;
+					AddAnnouncement(ANNOUNCE_2POINTS);
 					announced2P = true;
 				}
 			}
 			if (!announced1P && GetCVar("dominatrix_ddommode"))
 			{
-				if (GetCVar("dominatrix_scoremax") > 1 && ((GetCVar("dominatrix_scoremax")-global_scoreteamblue == 1) || (GetCVar("dominatrix_scoremax")-global_scoreteamred == 1)))
+				if (maxscore > 1 && ((maxscore-global_scoreteamblue == 1) || (maxscore-global_scoreteamred == 1)))
 				{
-					global_announcement = ANNOUNCE_1POINT;
+					AddAnnouncement(ANNOUNCE_1POINT);
 					announced1P = true;
 				}
 			}
 			if (!announced50P && !GetCVar("dominatrix_ddommode"))
 			{
-				if (GetCVar("dominatrix_scoremax") > 50 && ((GetCVar("dominatrix_scoremax")-global_scoreteamblue < 51) || (GetCVar("dominatrix_scoremax")-global_scoreteamred < 51)))
+				if (maxscore > 50 && ((maxscore-global_scoreteamblue < 51) || (maxscore-global_scoreteamred < 51)))
 				{
-					global_announcement = ANNOUNCE_50POINTS;
+					AddAnnouncement(ANNOUNCE_50POINTS);
 					announced50P = true;
 				}
 			}
@@ -655,11 +665,12 @@ Script "Dominatrix_NetworkGlobals" (void)
 		auxillary code to both convert the strings back to ints (AToI) and another to unpack the data.
 		I used this method in DoomWare and it works great. I should probably write a guide on this in the future...
 		This system isn't used in ZDaemon because clients can't access server CVars. Not a problem as the HUD isn't clientside in ZDaemon
-		due to all sorts of incompatibilities (mainly, no way to network data).
+		due to all sorts of incompatibilities (mainly, no way to network data). ZDoom doesn't have clientside scripts yet so this is the
+		only option available as well.
 	*/
 
-	global_zdaemoncompat = IsCompatibilityMode("zdaemon");
-	if (!IsCompatibilityMode("zdaemon"))
+	global_announcement = PopAnnouncement();
+	if (IsCompatibilityMode("zandronum"))
 	{
 		str cpinfo1 = "";
 		str cpinfo2 = "";
@@ -691,7 +702,6 @@ Script "Dominatrix_NetworkGlobals" (void)
 		SetGlobalCVarString("__clientsync_cpinfo1", cpinfo1);
 		SetGlobalCVarString("__clientsync_cpinfo2", cpinfo2);
 	}
-	global_announcement = ANNOUNCE_EMPTY;
 
 	delay(1);
     restart;
@@ -706,7 +716,7 @@ Script "Dominatrix_HUD_Zandronum" OPEN CLIENTSIDE
 
 	// Execute the announcer thread
 	if (!GetUserCVar(ConsolePlayerNumber(), "dominatrix_disableannouncer"))
-		ACS_NamedExecuteAlways("Dominatrix_Announcer_Zandronum", 0, ConsolePlayerNumber());
+		ACS_NamedExecute("Dominatrix_Announcer_Zandronum", 0, ConsolePlayerNumber());
 
 	// Draw every frame
 	HUDClear();
@@ -770,10 +780,7 @@ Script "Dominatrix_Announcer_Zandronum" (int plynum) CLIENTSIDE
 
 		// If spectator, don't run any code below
 		if (isSpectator)
-		{
-			delay(1);
-			continue;
-		}
+			terminate;
 		SetActivatorToPlayer(plynum);
 
 		// Check if a team specific announcement
@@ -799,7 +806,7 @@ Script "Dominatrix_Announcer_Zandronum" (int plynum) CLIENTSIDE
 				announcement1 = announcement;
 			else if (announcement2 == ANNOUNCE_EMPTY)
 				announcement2 = announcement;
-			else if (announcement2 == ANNOUNCE_EMPTY)
+			else if (announcement3 == ANNOUNCE_EMPTY)
 				announcement3 = announcement;
 		}
 
@@ -827,6 +834,7 @@ Script "Dominatrix_Announcer_ZDoom" (int plynum)
 	int announcement2 = ANNOUNCE_EMPTY;
 	int announcement3 = ANNOUNCE_EMPTY;
 	int nextAnnouncement = 0;
+
 	while (PlayerInGame(plynum))
 	{
 		int announcement = GetGlobalCVar("__clientsync_announce");
@@ -854,7 +862,7 @@ Script "Dominatrix_Announcer_ZDoom" (int plynum)
 				announcement1 = announcement;
 			else if (announcement2 == ANNOUNCE_EMPTY)
 				announcement2 = announcement;
-			else if (announcement2 == ANNOUNCE_EMPTY)
+			else if (announcement3 == ANNOUNCE_EMPTY)
 				announcement3 = announcement;
 		}
 
@@ -882,6 +890,7 @@ Script "Dominatrix_Announcer_ZDaemon" (int plynum)
 	int announcement2 = ANNOUNCE_EMPTY;
 	int announcement3 = ANNOUNCE_EMPTY;
 	int nextAnnouncement = 0;
+
 	while (PlayerNumber() != -1 && PlayerInGame(plynum))
 	{
 		int announcement = GetGlobalCVar("__clientsync_announce");
@@ -909,7 +918,7 @@ Script "Dominatrix_Announcer_ZDaemon" (int plynum)
 				announcement1 = announcement;
 			else if (announcement2 == ANNOUNCE_EMPTY)
 				announcement2 = announcement;
-			else if (announcement2 == ANNOUNCE_EMPTY)
+			else if (announcement3 == ANNOUNCE_EMPTY)
 				announcement3 = announcement;
 		}
 
@@ -972,6 +981,14 @@ Script "Dominatrix_AddControlPoint" (int x, int y, int z)
 	global_controlpoints[index][CPDATA_X] = x;
 	global_controlpoints[index][CPDATA_Y] = y;
 	global_controlpoints[index][CPDATA_Z] = z;
+	/*if (GetCVar("dominatrix_cptranslucent"))
+	{
+		SetActorProperty(global_controlpoints[index][CPDATA_TID], APROP_Alpha, 0.5);
+		SetActorProperty(global_controlpoints[index][CPDATA_TID], APROP_RenderStyle, STYLE_Translucent);
+	}
+	if (!GetCVar("dominatrix_cpsolid"))
+		SetActorProperty(global_controlpoints[index][CPDATA_TID], APROP_Radius, 1.0); // Doesn't work, needs DECORATE + DEHACKED
+	*/
 }
 script 24290 (int x, int y, int z) // Proxy script for ZDaemon DEHACKED Support
 {
@@ -1017,6 +1034,14 @@ Script "Dominatrix_AddControlPointBlue" (int x, int y, int z)
 	global_controlpoints[index][CPDATA_X] = x;
 	global_controlpoints[index][CPDATA_Y] = y;
 	global_controlpoints[index][CPDATA_Z] = z;
+	/*if (GetCVar("dominatrix_cptranslucent"))
+	{
+		SetActorProperty(global_controlpoints[index][CPDATA_TID], APROP_Alpha, 0.5);
+		SetActorProperty(global_controlpoints[index][CPDATA_TID], APROP_RenderStyle, STYLE_Translucent);
+	}
+	if (!GetCVar("dominatrix_cpsolid"))
+		SetActorProperty(global_controlpoints[index][CPDATA_TID], APROP_Radius, 1.0); // Doesn't work, needs DECORATE + DEHACKED
+	*/
 }
 script 24291 (int x, int y, int z) // Proxy script for ZDaemon DEHACKED Support
 {
@@ -1062,6 +1087,14 @@ Script "Dominatrix_AddControlPointRed" (int x, int y, int z)
 	global_controlpoints[index][CPDATA_X] = x;
 	global_controlpoints[index][CPDATA_Y] = y;
 	global_controlpoints[index][CPDATA_Z] = z;
+	/*if (GetCVar("dominatrix_cptranslucent"))
+	{
+		SetActorProperty(global_controlpoints[index][CPDATA_TID], APROP_Alpha, 0.5);
+		SetActorProperty(global_controlpoints[index][CPDATA_TID], APROP_RenderStyle, STYLE_Translucent);
+	}
+	if (!GetCVar("dominatrix_cpsolid"))
+		SetActorProperty(global_controlpoints[index][CPDATA_TID], APROP_Radius, 1.0); // Doesn't work, needs DECORATE + DEHACKED
+	*/
 }
 script 24292 (int x, int y, int z) // Proxy script for ZDaemon DEHACKED Support
 {
@@ -1081,7 +1114,7 @@ Script "Dominatrix_SetControlPointTeam" (int tid, int team, int silent)
         global_controlpoints[tid-TID_CP][CPDATA_CAPAMOUNT] = GetCVar("dominatrix_caphealth");
         global_cpcountblue++;
 		if (!silent)
-			global_announcement = ANNOUNCE_BLUE;
+			AddAnnouncement(ANNOUNCE_BLUE);
 		ACS_NamedExecuteAlways("Dominatrix_DoControlPointAnimation", 0, tid, ANIM_GREY2BLUE);
     }
     if (global_controlpoints[tid-TID_CP][CPDATA_TEAM] == TEAM_NONE && team == TEAM_RED)
@@ -1089,7 +1122,7 @@ Script "Dominatrix_SetControlPointTeam" (int tid, int team, int silent)
         global_controlpoints[tid-TID_CP][CPDATA_CAPAMOUNT] = -GetCVar("dominatrix_caphealth");
         global_cpcountred++;
 		if (!silent)
-			global_announcement = ANNOUNCE_RED;
+			AddAnnouncement(ANNOUNCE_RED);
 		ACS_NamedExecuteAlways("Dominatrix_DoControlPointAnimation", 0, tid, ANIM_GREY2RED);
     }
     if (global_controlpoints[tid-TID_CP][CPDATA_TEAM] == TEAM_BLUE && team == TEAM_NONE)
@@ -1097,7 +1130,7 @@ Script "Dominatrix_SetControlPointTeam" (int tid, int team, int silent)
         global_controlpoints[tid-TID_CP][CPDATA_CAPAMOUNT] = 0;
         global_cpcountblue--;
 		if (!silent)
-			global_announcement = ANNOUNCE_BLUEGREY;
+			AddAnnouncement(ANNOUNCE_BLUEGREY);
 
 		ACS_NamedExecuteAlways("Dominatrix_DoControlPointAnimation", 0, tid, ANIM_BLUE2GREY);
     }
@@ -1106,7 +1139,7 @@ Script "Dominatrix_SetControlPointTeam" (int tid, int team, int silent)
         global_controlpoints[tid-TID_CP][CPDATA_CAPAMOUNT] = 0;
         global_cpcountred--;
 		if (!silent)
-			global_announcement = ANNOUNCE_REDGREY;
+			AddAnnouncement(ANNOUNCE_REDGREY);
 		ACS_NamedExecuteAlways("Dominatrix_DoControlPointAnimation", 0, tid, ANIM_RED2GREY);
     }
 	global_controlpoints[tid-TID_CP][CPDATA_TEAM] = team;
@@ -1258,9 +1291,7 @@ Returns - True if the compatibility mode is selected, false if otherwise
 -------------------------------------------------------------*/
 function bool IsCompatibilityMode(str compatMode)
 {
-	if (!global_zdaemoncompat)
-		return !StrICmp(GetCVarString("dominatrix_compatibility"), compatMode);
-	return true;
+	return !StrICmp(GetCVarString("dominatrix_compatibility"), compatMode);
 }
 
 /*-------------------------------------------------------------
@@ -1478,7 +1509,7 @@ function void HUDLoop(int plynum, bool isSpectator)
 
 Code that plays an announcement
 Argument 0 - The playernumber of the client
-Returns - true if we played a sound, false if otherwise
+Argument 1 - The announcement to play
 -------------------------------------------------------------*/
 function void PlayAnnouncement(int plynum, int announcement)
 {
@@ -1490,23 +1521,41 @@ function void PlayAnnouncement(int plynum, int announcement)
 	{
 		case ANNOUNCE_BLUEGREY:
 			if (plyteam == TEAM_BLUE)
+			{
 				sound = StrParam(s:sound, s:"CPGrey", d:Random(1, 3));
+				ShowTextAnnouncement(plynum, "We lost a control point!");
+			}
 			break;
 		case ANNOUNCE_REDGREY:
 			if (plyteam == TEAM_RED)
+			{
 				sound = StrParam(s:sound, s:"CPGrey", d:Random(1, 3));
+				ShowTextAnnouncement(plynum, "We lost a control point!");
+			}
 			break;
 		case ANNOUNCE_BLUE:
 			if (plyteam == TEAM_BLUE)
+			{
 				sound = StrParam(s:sound, s:"CPGet", d:Random(1, 4));
+				ShowTextAnnouncement(plynum, "We gained a control point!");
+			}
 			else
+			{
 				sound = StrParam(s:sound, s:"CPLose", d:Random(1, 3));
+				ShowTextAnnouncement(plynum, "The enemy captured a control point!");
+			}
 			break;
 		case ANNOUNCE_RED:
 			if (plyteam == TEAM_RED)
+			{
 				sound = StrParam(s:sound, s:"CPGet", d:Random(1, 4));
+				ShowTextAnnouncement(plynum, "We gained a control point!");
+			}
 			else
+			{
 				sound = StrParam(s:sound, s:"CPLose", d:Random(1, 3));
+				ShowTextAnnouncement(plynum, "The enemy captured a control point!");
+			}
 			break;
 		case ANNOUNCE_BLUESCORE:
 			return;
@@ -1529,26 +1578,64 @@ function void PlayAnnouncement(int plynum, int announcement)
 			break;
 		case ANNOUNCE_1MINUTE:
 			sound = StrParam(s:sound, s:"1Minute");
+			ShowTextAnnouncement(plynum, "1 minute left!");
 			break;
 		case ANNOUNCE_5MINUTES:
 			sound = StrParam(s:sound, s:"5Minutes");
+			ShowTextAnnouncement(plynum, "5 minutes left!");
 			break;
 		case ANNOUNCE_1POINT:
 			sound = StrParam(s:sound, s:"1PointLeft");
+			ShowTextAnnouncement(plynum, "1 point left!");
 			break;
 		case ANNOUNCE_2POINTS:
 			sound = StrParam(s:sound, s:"2PointsLeft");
+			ShowTextAnnouncement(plynum, "2 points left!");
 			break;
 		case ANNOUNCE_3POINTS:
 			sound = StrParam(s:sound, s:"3PointsLeft");
+			ShowTextAnnouncement(plynum, "3 points left!");
 			break;
 		case ANNOUNCE_50POINTS:
 			sound = StrParam(s:sound, s:"50PointsLeft");
+			ShowTextAnnouncement(plynum, "50 points left!");
 			break;
 	}
 
-	// Play the sound and return that we did
+	// Play the sound and return the new text announcement
 	LocalAmbientSound(sound, 127);
+}
+
+/*-------------------------------------------------------------
+					  ShowTextAnnouncement
+
+Code that shows an announcment in text
+Argument 0 - The playernumber of who to show the announcement to
+Argument 1 - The announcement to show
+-------------------------------------------------------------*/
+function void ShowTextAnnouncement(int plynum, str text)
+{
+	int scrW = 320;
+	int scrH = 240;
+
+	// Check if the player wants non scaled text
+	if (GetClientCVar(plynum, "dominatrix_disablehudscale"))
+	{
+		scrW = GetScreenWidth();
+		scrH = GetScreenHeight();
+	}
+
+	// Set the font and screen scale
+	SetFont("SMALLFONT");
+	SetHudSize(scrW, scrH, false);
+
+	// Print to the message area
+	if (GetClientCVar(plynum, "dominatrix_enablelog"))
+		Log(s:text);
+
+	// Print to the center of the screen
+	if (GetClientCVar(plynum, "dominatrix_enablecenterprint"))
+		HudMessage(s:text; HUDMSG_FADEOUT, MSGID_ANNOUNCE, CR_WHITE,  (scrW/2 << 16)+0.4, (scrH/2 << 16)-32.0, 1.5, 0.5);
 }
 
 /*-------------------------------------------------------------
@@ -1839,10 +1926,10 @@ Argument 0 - The CVar to get the value of
 -------------------------------------------------------------*/
 function int GetGlobalCVar(str cvar)
 {
-	if (!IsCompatibilityMode("zdaemon"))
+	if (IsCompatibilityMode("zandronum"))
 		return GetCvar(cvar);
 
-	// Messy but required for ZDaemon compatibility
+	// Messy but required for ZDaemon/ZDoom compatibility
 	int value = 0;
 	if (!StrCmp(cvar, "__clientsync_time")) value = global_time;
 	else if (!StrCmp(cvar, "__clientsync_redscore")) value = global_scoreteamred;
@@ -1864,7 +1951,7 @@ Argument 0 - The CVar to get the value of
 -------------------------------------------------------------*/
 function str GetGlobalCVarString(str cvar)
 {
-	if (!IsCompatibilityMode("zdaemon"))
+	if (IsCompatibilityMode("zandronum"))
 		return GetCvarString(cvar);
 
 	// Pack the control point info into a string
@@ -1895,6 +1982,43 @@ function str GetGlobalCVarString(str cvar)
 		}
 	}
 	return cpinfo;
+}
+
+/*-------------------------------------------------------------
+						AddAnnouncement
+Adds an announcement to the announcement stack (push)
+Argument 1 - The announcement to add
+-------------------------------------------------------------*/
+function void AddAnnouncement(int announcement)
+{
+	for (int i=0; i<MAXANNOUNCEMENTS; i++)
+	{
+		if (global_announcements[i] == ANNOUNCE_EMPTY)
+		{
+			global_announcements[i] = announcement;
+			break;
+		}
+	}
+}
+
+/*-------------------------------------------------------------
+						PopAnnouncement
+Removes the first announcement from the announcement stack and
+returns it.
+Returns - The announcement that got popped, or 0 if none
+-------------------------------------------------------------*/
+function int PopAnnouncement(void)
+{
+	int popped = ANNOUNCE_EMPTY;
+	if (global_announcements[0] == ANNOUNCE_EMPTY)
+		return popped;
+
+	popped = global_announcements[0];
+	for (int i=1; i<MAXANNOUNCEMENTS; i++)
+		global_announcements[i-1] = global_announcements[i];
+	global_announcements[MAXANNOUNCEMENTS-1] = ANNOUNCE_EMPTY;
+
+	return popped;
 }
 
 /*-------------------------------------------------------------
