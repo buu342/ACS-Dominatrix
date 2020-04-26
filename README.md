@@ -79,12 +79,12 @@ Credits are provided within the WAD as a special lump.
 
 ### Changelog
 **Version 1.3**
-* + [Added 2 Clientside console commands to print announcements to the screen in text](https://github.com/buu342/ACS-Dominatrix/issues/30)
-* \* [Changed player TID's to start at 1000 instead of 1337](https://github.com/buu342/ACS-Dominatrix/issues/31)
-* \* [Made some changes for (G)ZDoom Compatibility](https://github.com/buu342/ACS-Dominatrix/issues/27)
-* \* Announcer now takes into account the values of the scorelimitper### CVar(s)
-* \* Fixed an issue with announcements repeating themselves or not playing at all
-* \* Fixed an issue with the HUD disappearing in Zandronum
+* +[Added 2 Clientside console commands to print announcements to the screen in text](https://github.com/buu342/ACS-Dominatrix/issues/30)
+* \*[Changed player TID's to start at 1000 instead of 1337](https://github.com/buu342/ACS-Dominatrix/issues/31)
+* \*[Made some changes for (G)ZDoom Compatibility](https://github.com/buu342/ACS-Dominatrix/issues/27)
+* \*Announcer now takes into account the values of the scorelimitper### CVar(s)
+* \*Fixed an issue with announcements repeating themselves or not playing at all
+* \*Fixed an issue with the HUD disappearing in Zandronum
 
 **Version 1.2**
 * +[Added proper ZDaemon support](https://github.com/buu342/ACS-Dominatrix/issues/1)
