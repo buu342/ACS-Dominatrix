@@ -1,11 +1,12 @@
 ![](https://i.imgur.com/kxijgwR.gif)![](https://i.imgur.com/mancHEJ.png)
 ---
-A highly configurable domination gamemode replacement for Zandronum, ZDaemon, and (G)ZDoom.
+A highly configurable domination gamemode replacement for Zandronum, (G)ZDoom, and ZDaemon.
 
 This WAD requested by the MDF community.<br/><br/>
 
-### How to place control points on pre-existing maps (AKA make an injection WAD)
-  **1)** Write a script to spawn command posts onto the map. Use the format `ACS_NamedExecuteAlways("Dominatrix_AddControlPoint", 0, x, y, z);`, where `x, y, z` are the **FIXED POINT** coordinates to place the command post. Example script:
+### How to use
+  **1)** Include this WAD in your server's wad list.<br/>
+  **2)** Write a script to spawn command posts onto the map. Use the format `ACS_NamedExecuteAlways("Dominatrix_AddControlPoint", 0, x, y, z);`, where `x, y, z` are the **FIXED POINT** coordinates to place the command post. Example script:
 ```c
 Script 1 OPEN
 {
@@ -14,27 +15,10 @@ Script 1 OPEN
     ACS_NamedExecuteAlways("Dominatrix_AddControlPointRed", 0, 416.0, -416.0, 8.0);
 }
 ```
-  **2)** Put `#library "NAME"` at the top of the ACS script, where NAME is a unique name **less than or equal to 8 characters**<br/>
-  **3)** Compile the ACS, placing it between A_START and A_END lumps. Ensure it is the same name as NAME in your library.<br/>
-  **4)** Create a new lump called LOADACS, and inside write the name of the compiled ACS file (should be NAME of your library).<br/>
-  **5)** Be sure to include the WAD that executes that script along with the server's files.<br/>
-Examples are provided in the "Injection WADs" folder within this repository.<br/>
-If you prefer, you can use [ZDaemon's Patchinfo method](http://master.zdaemon.org/patchinfo.txt), however this will result in your injection WAD only being compatible in ZDaemon, which defeats the purpose of the multi-sourceport compatibility.<br/><br/>
-  
-### How to place control points on your custom maps
-You can either use the method outlined above OR place the control point entities directly on the map. The following actors are available:
-```c
-ControlPoint_Grey 10000 (SpawnID 213)
-ControlPoint_Blue 10001 (SpawnID 214)
-ControlPoint_Red  10002 (SpawnID 215)
-```
-<br/>
-
-### How to use on a server
-  **1)** Include the latest version of the Dominatrix WAD in your server's wad list, as well as the map pack you want to use and the injection script to place CP's in said map pack.<br/>
-  **2)** Ensure the server is running "Team Deathmatch" as the selected gamemode.<br/>
-  **3)** Ensure the default gamemode's score limit and time limit are both set to 0 to prevent conflicts with Dominatrix. I would also recommend disabling the announcer as this gamemode comes with its own. <br/>
-  **4)** If using ZDaemon, include Dominatrix.cfg (or call it in the console via `exec dominatrix.cfg`) in your server so that all Dominatrix related CVars are set. Also, be aware that in ZDaemon, CVars need to have 1/0 as opposed to true/false, and that you **cannot** use decimal numbers!  
+  **3)** Be sure to include the WAD that executes that script along with the server's files.<br/>
+  **4)** Ensure the server is running "Team Deathmatch" as the selected gamemode.<br/>
+  **5)** Ensure the default gamemode's score limit and time limit are both set to 0 to prevent conflicts with Dominatrix. I would also recommend disabling the announcer as this gamemode comes with its own. 
+  **6)** If using ZDaemon, include Dominatrix.cfg in your server so that all Dominatrix related CVars are set. Also, be aware that in ZDaemon, CVars need to have 1/0 as opposed to true/false, and that you **cannot** use decimal numbers!  
 <br/><br/>
 
 ### How to compile the Dominatrix ACS source
@@ -84,6 +68,8 @@ dominatrix_disablemarkers       = false; // (Don't) Show markers on the CP's?
 dominatrix_disableshowallcps    = false; // (Don't) Show all the CP's on the top of the screen?
 dominatrix_disablehudscale      = false; // (Don't) Scale the HUD to 640x480?
 dominatrix_disablehudwidescreen = false; // (Don't) Use a 16:9 ratio on the HUD?
+dominatrix_enablelog            = false; // Log announcements (in text) to the message area?
+dominatrix_enablecenterprint    = false; // Show announcements (in text) in the center of the screen?
 ```
 <br/>
 
@@ -92,6 +78,14 @@ Credits are provided within the WAD as a special lump.
 <br/><br/>
 
 ### Changelog
+**Version 1.3**
+* + [Added 2 Clientside console commands to print announcements to the screen in text](https://github.com/buu342/ACS-Dominatrix/issues/30)
+* \* [Changed player TID's to start at 1000 instead of 1337](https://github.com/buu342/ACS-Dominatrix/issues/31)
+* \* [Made some changes for (G)ZDoom Compatibility](https://github.com/buu342/ACS-Dominatrix/issues/27)
+* \* Announcer now takes into account the values of the scorelimitper### CVar(s)
+* \* Fixed an issue with announcements repeating themselves or not playing at all
+* \* Fixed an issue with the HUD disappearing in Zandronum
+
 **Version 1.2**
 * +[Added proper ZDaemon support](https://github.com/buu342/ACS-Dominatrix/issues/1)
 * +[Added a Double Domination variant](https://github.com/buu342/ACS-Dominatrix/issues/18)
@@ -105,7 +99,6 @@ Credits are provided within the WAD as a special lump.
 * \*[Fixed SBARINFO jitter by changing it to ACS](https://github.com/buu342/ACS-Dominatrix/issues/2)
 * \*[Made it so that the "official" score gets set at the end of the game](https://github.com/buu342/ACS-Dominatrix/issues/22)
 * \*Negated all clientside CVar's by default, in order to allow for ZDaemon compatibility. 
-
 
 **Version 1.1**
 * +[Game now shows why it ended](https://github.com/buu342/ACS-Dominatrix/issues/14)
