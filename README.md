@@ -19,9 +19,7 @@ Script 1 OPEN
   **4)** Create a new lump called LOADACS, and inside write the name of the compiled ACS file (should be NAME of your library).<br/>
   **5)** Be sure to include the WAD that executes that script along with the server's files.<br/>
 Examples are provided in the "Injection WADs" folder within this repository.<br/>
-If you prefer, you can use [ZDaemon's Patchinfo method](http://master.zdaemon.org/patchinfo.txt), however this will result in your injection WAD only being compatible in ZDaemon, which defeats the purpose of the multi-sourceport compatibility.
-If you don't feel comfortable with ACS, you can use [Krawa's Dominatrix Tool](https://forums.zdaemon.org/viewtopic.php?p=280098#280098] (also included here in the tools folder) to place CP's and autogenerate the ACS code.
-<br/><br/>
+If you prefer, you can use [ZDaemon's Patchinfo method](http://master.zdaemon.org/patchinfo.txt), however this will result in your injection WAD only being compatible in ZDaemon, which defeats the purpose of the multi-sourceport compatibility.<br/><br/>
   
 ### How to place control points on your custom maps
 You can either use the method outlined above OR place the control point entities directly on the map. The following actors are available:
@@ -60,6 +58,7 @@ dominatrix_capteamregen = false; // If the control point lost some health, can i
 dominatrix_capregentime = 0.0;   // How many seconds it takes for a control point to automatically regenerate 1 hp (0 for none)
 dominatrix_capmultiple  = false; // Will a control point lose health faster if more people are capturing it?
 dominatrix_capbelow     = true;  // Allow capturing if the player is below the control point?
+dominatrix_capabove     = true;  // Allow capturing if the player is above the control point?
 
 dominatrix_scorefrag      = false; // Do you get points for fragging players?
 dominatrix_scoreperfrag   = 1;     // How many points to you get for fragging players
@@ -75,6 +74,10 @@ dominatrix_timelimitperplayer  = 0; // Increase the max time by this number mult
 dominatrix_ddommode         = false; // Use Double Domination mode?
 dominatrix_ddomscoretime    = 10;    // How much time do teams need to hold the CP's to score in Double Domination?
 dominatrix_ddomresetonscore = true;  // Do all control points reset back to grey when a team scores?
+
+dominatrix_cpsolid       = true;  // Make the Control Points solid
+dominatrix_cptranslucent = false; // Make the Control Points slightly translucent
+
 ```
 <br/>
 
@@ -96,6 +99,12 @@ Credits are provided within the WAD as a special lump.
 <br/><br/>
 
 ### Changelog
+**Version 1.33**
++ [Added dominatrix_capabove CVar](https://github.com/buu342/ACS-Dominatrix/issues/32)
++ [Added CVars to make the CP Solid or translucent](https://github.com/buu342/ACS-Dominatrix/issues/34)
+* \*[Fixed how sometimes the capture HUD would show when below a CP](https://github.com/buu342/ACS-Dominatrix/issues/33) 
+* \*Reduced HUDMessage sending to improve network usage in ZDaemon
+
 **Version 1.3**
 * +[Added 2 Clientside console commands to print announcements to the screen in text](https://github.com/buu342/ACS-Dominatrix/issues/30)
 * \*[Changed player TID's to start at 1000 instead of 1337](https://github.com/buu342/ACS-Dominatrix/issues/31)
@@ -117,7 +126,6 @@ Credits are provided within the WAD as a special lump.
 * \*[Fixed SBARINFO jitter by changing it to ACS](https://github.com/buu342/ACS-Dominatrix/issues/2)
 * \*[Made it so that the "official" score gets set at the end of the game](https://github.com/buu342/ACS-Dominatrix/issues/22)
 * \*Negated all clientside CVar's by default, in order to allow for ZDaemon compatibility. 
-
 
 **Version 1.1**
 * +[Game now shows why it ended](https://github.com/buu342/ACS-Dominatrix/issues/14)
