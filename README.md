@@ -102,7 +102,7 @@ Credits are provided within the WAD as a special lump.
 **Version 1.33**
 + [Added dominatrix_capabove CVar](https://github.com/buu342/ACS-Dominatrix/issues/32)
 + [Added CVars to make the CP Solid or translucent](https://github.com/buu342/ACS-Dominatrix/issues/34)
-* \*[Fixed how sometimes the capture HUD would show when below a CP](https://github.com/buu342/ACS-Dominatrix/issues/33) 
+* \*[Fixed how sometimes the capture HUD would show when below a CP](https://github.com/buu342/ACS-Dominatrix/issues/33)
 * \*Reduced HUDMessage sending to improve network usage in ZDaemon
 
 **Version 1.3**
