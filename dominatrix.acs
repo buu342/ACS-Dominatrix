@@ -8,7 +8,7 @@
 ===================================================================================================*/
 
 #define DUMMY ""        // Needed to prevent text bugs from ocurring
-#define VERSION "1.3"
+#define VERSION "1.33"
 #define SECOND 35
 
 #define MAXPLAYERS 64       // No need to change
@@ -16,6 +16,7 @@
 #define MAXANNOUNCEMENTS 3	// Maxumum number of announcements at once
 #define CPPERLINEHUD 10		// Maximum number of CP's per line in your HUD
 #define CAPBELOW_HEIGHT 8.0 // Cap below (CVar) tolerance height
+#define CAPABOVE_HEIGHT 64.0 // Cap above (CVar) tolerance height
 
 // Macros for Message ID's
 #define MSGID_CONSOLE  -1
@@ -100,13 +101,14 @@
 #define END_TIME  2
 
 // Dominatrix SpawnID's
-#define T_CPGREY     213
-#define T_CPBLUE     214
-#define T_CPRED      215
-#define T_CPALTAR    216
-#define T_CPEYE      217
-#define T_CPEYESPIN1 218
-#define T_CPEYESPIN2 219
+#define T_CPGREY       213
+#define T_CPBLUE       214
+#define T_CPRED        215
+#define T_CPALTARSOLID 216
+#define T_CPEYE        217
+#define T_CPEYESPIN1   218
+#define T_CPEYESPIN2   219
+#define T_CPALTAR      220
 
 // Animations
 #define ANIM_BLUE2GREY 0
@@ -325,7 +327,11 @@ Script "Dominatrix_HandleControlPoints" (void)
 				}
 
 				// Prevent capping from below
-				if (!GetCVar("dominatrix_capbelow") && GetActorZ(plytid)+CAPBELOW_HEIGHT < global_controlpoints[j][CPDATA_Z])
+				if (!GetCVar("dominatrix_capbelow") && GetActorZ(plytid) < global_controlpoints[j][CPDATA_Z]-CAPBELOW_HEIGHT)
+					continue;
+
+				// Prevent capping from above
+				if (!GetCVar("dominatrix_capabove") && GetActorZ(plytid) > global_controlpoints[j][CPDATA_Z]+CAPABOVE_HEIGHT)
 					continue;
 
 				// If a player is near a control point, mark his team as trying to capture it
@@ -726,6 +732,7 @@ Script "Dominatrix_HUD_Zandronum" OPEN CLIENTSIDE
 		HUDLoop(ConsolePlayerNumber(), PlayerIsSpectator(ConsolePlayerNumber()));
 		delay(1);
 	}
+	HUDClear();
 }
 
 // HUD - ZDoom
@@ -739,12 +746,13 @@ Script "Dominatrix_HUD_ZDoom" (void)
 		ACS_NamedExecuteAlways("Dominatrix_Announcer_ZDoom", 0, plynum);
 
 	// Draw every frame
+	HUDClear();
 	while (PlayerInGame(plynum))
 	{
 		HUDLoop(plynum, false);
 		delay(1);
-		HUDClear();
 	}
+	HUDClear();
 }
 
 // HUD - ZDaemon
@@ -757,12 +765,13 @@ Script "Dominatrix_HUD_ZDaemon" (void)
 		ACS_NamedExecuteAlways("Dominatrix_Announcer_ZDaemon", 0, PlayerNumber());
 
 	// Draw every frame
+	HUDClear();
 	while (PlayerNumber() != -1 && PlayerInGame(PlayerNumber()))
 	{
 		HUDLoop(PlayerNumber(), false);
 		delay(1);
-		HUDClear();
 	}
+	HUDClear();
 }
 
 // Handle the announcer (Zandronum)
@@ -970,7 +979,10 @@ Script "Dominatrix_AddControlPoint" (int x, int y, int z)
 
     // Spawn the Altar and Eye (Done like this for ZDaemon Compatibility)
 	SpawnForced("MapSpot", x, y, z, TID_DELETE, 0.0);
-	Thing_SpawnNoFog(TID_DELETE, T_CPALTAR, 0.0, global_controlpoints[index][CPDATA_TID]);
+	if (GetCVar("dominatrix_cpsolid"))
+		Thing_SpawnNoFog(TID_DELETE, T_CPALTARSOLID, 0.0, global_controlpoints[index][CPDATA_TID]);
+	else
+		Thing_SpawnNoFog(TID_DELETE, T_CPALTAR, 0.0, global_controlpoints[index][CPDATA_TID]);
 	Thing_SpawnNoFog(TID_DELETE, T_CPEYE, 0.0, global_controlpoints[index][CPDATA_TID]+MAXCONTROLPOINTS);
 	Thing_Remove(TID_DELETE);
     global_cpcount++;
@@ -981,14 +993,13 @@ Script "Dominatrix_AddControlPoint" (int x, int y, int z)
 	global_controlpoints[index][CPDATA_X] = x;
 	global_controlpoints[index][CPDATA_Y] = y;
 	global_controlpoints[index][CPDATA_Z] = z;
-	/*if (GetCVar("dominatrix_cptranslucent"))
+
+	// Make the altar translucent
+	if (GetCVar("dominatrix_cptranslucent"))
 	{
 		SetActorProperty(global_controlpoints[index][CPDATA_TID], APROP_Alpha, 0.5);
 		SetActorProperty(global_controlpoints[index][CPDATA_TID], APROP_RenderStyle, STYLE_Translucent);
 	}
-	if (!GetCVar("dominatrix_cpsolid"))
-		SetActorProperty(global_controlpoints[index][CPDATA_TID], APROP_Radius, 1.0); // Doesn't work, needs DECORATE + DEHACKED
-	*/
 }
 script 24290 (int x, int y, int z) // Proxy script for ZDaemon DEHACKED Support
 {
@@ -1021,7 +1032,10 @@ Script "Dominatrix_AddControlPointBlue" (int x, int y, int z)
 
     // Spawn the Altar and Eye (Done like this for ZDaemon Compatibility)
 	SpawnForced("MapSpot", x, y, z, TID_DELETE, 0.0);
-	Thing_SpawnNoFog(TID_DELETE, T_CPALTAR, 0.0, global_controlpoints[index][CPDATA_TID]);
+	if (GetCVar("dominatrix_cpsolid"))
+		Thing_SpawnNoFog(TID_DELETE, T_CPALTARSOLID, 0.0, global_controlpoints[index][CPDATA_TID]);
+	else
+		Thing_SpawnNoFog(TID_DELETE, T_CPALTAR, 0.0, global_controlpoints[index][CPDATA_TID]);
 	Thing_SpawnNoFog(TID_DELETE, T_CPEYE, 0.0, global_controlpoints[index][CPDATA_TID]+MAXCONTROLPOINTS);
 	Thing_Remove(TID_DELETE);
     global_cpcount++;
@@ -1034,14 +1048,13 @@ Script "Dominatrix_AddControlPointBlue" (int x, int y, int z)
 	global_controlpoints[index][CPDATA_X] = x;
 	global_controlpoints[index][CPDATA_Y] = y;
 	global_controlpoints[index][CPDATA_Z] = z;
-	/*if (GetCVar("dominatrix_cptranslucent"))
+
+	// Make the altar translucent
+	if (GetCVar("dominatrix_cptranslucent"))
 	{
 		SetActorProperty(global_controlpoints[index][CPDATA_TID], APROP_Alpha, 0.5);
 		SetActorProperty(global_controlpoints[index][CPDATA_TID], APROP_RenderStyle, STYLE_Translucent);
 	}
-	if (!GetCVar("dominatrix_cpsolid"))
-		SetActorProperty(global_controlpoints[index][CPDATA_TID], APROP_Radius, 1.0); // Doesn't work, needs DECORATE + DEHACKED
-	*/
 }
 script 24291 (int x, int y, int z) // Proxy script for ZDaemon DEHACKED Support
 {
@@ -1074,7 +1087,10 @@ Script "Dominatrix_AddControlPointRed" (int x, int y, int z)
 
     // Spawn the Altar and Eye (Done like this for ZDaemon Compatibility)
 	SpawnForced("MapSpot", x, y, z, TID_DELETE, 0.0);
-	Thing_SpawnNoFog(TID_DELETE, T_CPALTAR, 0.0, global_controlpoints[index][CPDATA_TID]);
+	if (GetCVar("dominatrix_cpsolid"))
+		Thing_SpawnNoFog(TID_DELETE, T_CPALTARSOLID, 0.0, global_controlpoints[index][CPDATA_TID]);
+	else
+		Thing_SpawnNoFog(TID_DELETE, T_CPALTAR, 0.0, global_controlpoints[index][CPDATA_TID]);
 	Thing_SpawnNoFog(TID_DELETE, T_CPEYE, 0.0, global_controlpoints[index][CPDATA_TID]+MAXCONTROLPOINTS);
 	Thing_Remove(TID_DELETE);
     global_cpcount++;
@@ -1087,14 +1103,13 @@ Script "Dominatrix_AddControlPointRed" (int x, int y, int z)
 	global_controlpoints[index][CPDATA_X] = x;
 	global_controlpoints[index][CPDATA_Y] = y;
 	global_controlpoints[index][CPDATA_Z] = z;
-	/*if (GetCVar("dominatrix_cptranslucent"))
+
+	// Make the altar translucent
+	if (GetCVar("dominatrix_cptranslucent"))
 	{
 		SetActorProperty(global_controlpoints[index][CPDATA_TID], APROP_Alpha, 0.5);
 		SetActorProperty(global_controlpoints[index][CPDATA_TID], APROP_RenderStyle, STYLE_Translucent);
 	}
-	if (!GetCVar("dominatrix_cpsolid"))
-		SetActorProperty(global_controlpoints[index][CPDATA_TID], APROP_Radius, 1.0); // Doesn't work, needs DECORATE + DEHACKED
-	*/
 }
 script 24292 (int x, int y, int z) // Proxy script for ZDaemon DEHACKED Support
 {
@@ -1500,8 +1515,6 @@ function void HUDLoop(int plynum, bool isSpectator)
 		SetFont("DBIGFONT");
 		HudMessage(s:gameover; HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_HUDSTATE, CR_RED, (scrW/2 << 16)+0.4, (scrH/2 << 16)-32.0, 1.0);
 	}
-	else
-		HudMessage(s:""; HUDMSG_PLAIN | HUDMSG_NOTWITHFULLMAP, MSGID_HUDSTATE, CR_RED, (scrW/2 << 16), (scrH/2 << 16), 1.0);
 }
 
 /*-------------------------------------------------------------
@@ -1825,7 +1838,10 @@ function void CPInfoDraw(int plynum, bool isSpectator, str cpdata1, str cpdata2,
 		// Draw the CP being captured above the STATUSBAR
 		if (!isSpectator)
 		{
-			if (GetCVar("dominatrix_capbelow") || (!GetCVar("dominatrix_capbelow") && GetActorZ(0)+CAPBELOW_HEIGHT >= cpz))
+			// Don't show the HUD element if the player is above/below the CP with the settings enabled
+			bool capbelow = (GetCVar("dominatrix_capbelow") || (!GetCVar("dominatrix_capbelow") && GetActorZ(0) >= cpz-CAPBELOW_HEIGHT));
+			bool capabove = (GetCVar("dominatrix_capabove") || (!GetCVar("dominatrix_capabove") && GetActorZ(0) <= cpz+CAPABOVE_HEIGHT));
+			if (capbelow && capabove)
 			{
 				if ((dist>>16) < GetCVar("dominatrix_capdistance") && ((!capteamregen && plyteam != cpteam) || (capteamregen && abs(cphealth) < cpmaxhealth) || cphealth == 0))
 				{
