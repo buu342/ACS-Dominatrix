@@ -18,12 +18,23 @@ map27
 map28
 ```
 
+### aeondm_mdf_cp.pk3
+An injection WAD for [ABC Deathmatch Maps (V4)](https://www.doomworld.com/idgames/levels/doom2/deathmatch/Ports/megawads/aeondm). Created for the Dominatrix 8v8 Tournament hosted by MDF on the 20th of Feburary 2021. Because AeonDM doesn't use standard map names, this file needs to be loaded last as it overwrites the MAPINFO lump used in AeonDM in order to allow for CP placement to work. While the extension is PK3, this is actually a WAD file. It was renamed to PK3 to ensure that Zandronum loads the file last (because AeonDM comes in PK3 format). This WAD contains the following maps:
+```
+AEON01
+AEON02
+AEON04
+AEON10
+AEON23
+AEON27
+```
+
 ### mdffa-dom.wad
 An injection WAD for the [mdffa_v1 compilation](https://www.wad-archive.com/wad/4d58151d309d5c199236fd11c8b5bc9e). Created by Marcaek. Supports all 18 maps in the WAD.
 
 
 ### neondm_cp.pk3
-An injection WAD for [NeonDM](https://www.doomworld.com/forum/topic/92275-released-neondm/). Created by Slaerd for the Dominatrix 3v3 Tournament hosted by MDF on the 3rd of May. Because NeonDM doesn't use standard map names, this file needs to be loaded last as it overwrites the MAPINFO lump used in NeonDM in order to allow for CP placement to work. While the extension is PK3, this is actually a WAD file. It was renamed to PK3 to ensure that Zandronum loads the file last (because NeonDM comes in PK3 format). This WAD contains the following maps:
+An injection WAD for [NeonDM](https://www.doomworld.com/forum/topic/92275-released-neondm/). Created by Slaerd for the Dominatrix 3v3 Tournament hosted by MDF on the 3rd of May 2020. Because NeonDM doesn't use standard map names, this file needs to be loaded last as it overwrites the MAPINFO lump used in NeonDM in order to allow for CP placement to work. While the extension is PK3, this is actually a WAD file. It was renamed to PK3 to ensure that Zandronum loads the file last (because NeonDM comes in PK3 format). This WAD contains the following maps:
 ```
 NEON01
 NEON02
