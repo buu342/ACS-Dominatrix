@@ -45,6 +45,9 @@ NEON13
 NEON15
 ```
 
+### neondm_cp2.pk3
+An update for the previous NeonDM injection WAD. This one contains some CP position revisions for `NEON13` and `NEON15`, as well as the addition of `NEON03` and `NEON05`. It was created for the 8v8 NeonDM Dominatrix event hosted by MDF on the 24th of October, 2021.
+
 ### udm3xdom.wad
 An injection script for [UDM3 + UDMX](http://doomshack.org/wads/udmx_udm3.wad). Created for the Dominatrix Playtest Session hosted by MDF on the 21st of March. Contains the following maps:
 ```
