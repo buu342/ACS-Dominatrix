@@ -19,7 +19,7 @@ map28
 ```
 
 ### aeondm_mdf_cp.pk3
-An injection WAD for [ABC Deathmatch Maps (V4)](https://www.doomworld.com/idgames/levels/doom2/deathmatch/Ports/megawads/aeondm). Created for the Dominatrix 8v8 Tournament hosted by MDF on the 20th of Feburary 2021. Because AeonDM doesn't use standard map names, this file needs to be loaded last as it overwrites the MAPINFO lump used in AeonDM in order to allow for CP placement to work. While the extension is PK3, this is actually a WAD file. It was renamed to PK3 to ensure that Zandronum loads the file last (because AeonDM comes in PK3 format). This WAD contains the following maps:
+An injection WAD for [Aeon Deathmatch](https://www.doomworld.com/idgames/levels/doom2/deathmatch/Ports/megawads/aeondm). Created for the Dominatrix 8v8 Tournament hosted by MDF on the 20th of Feburary 2021. Because AeonDM doesn't use standard map names, this file needs to be loaded last as it overwrites the MAPINFO lump used in AeonDM in order to allow for CP placement to work. While the extension is PK3, this is actually a WAD file. It was renamed to PK3 to ensure that Zandronum loads the file last (because AeonDM comes in PK3 format). This WAD contains the following maps:
 ```
 AEON01
 AEON02
@@ -27,6 +27,25 @@ AEON04
 AEON10
 AEON23
 AEON27
+```
+
+### dbabeon_cp.pk3
+An injection WAD for Don't Be a Bitch, but specifically the [EON Collection version](https://www.wad-archive.com/wad/be4e7fd2b3ae008a4ece98f4f2efab76cce62000). Created for the Dominatrix 8v8 Tournament hosted by MDF on the 27th of March 2022. Because DBAB doesn't use standard map names, this file needs to be loaded last as it overwrites the MAPINFO lump used in DBAB in order to allow for CP placement to work. While the extension is PK3, this is actually a WAD file. It was renamed to PK3 to ensure that Zandronum loads the file last (because the EON collection comes in PK3 format). This WAD contains the following maps:
+```
+DBAB03
+DBAB05
+DBAB07
+DBAB10
+DBAB12
+DBAB13
+DBAB14
+DBAB16
+DBAB19
+DBAB24
+DBAB25
+DBAB26
+DBAB28
+DBAB30
 ```
 
 ### mdffa-dom.wad
