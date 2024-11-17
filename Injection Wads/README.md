@@ -40,6 +40,17 @@ MAP16
 MAP21
 ```
 
+# cullingstrike_dom1.wad
+An injection WAD for [Culling Strike](https://www.doomworld.com/forum/topic/137962-culling-strike-zandronum-deathmatch-community-project/). Created for the Dominatrix 8v8 Tournament hosted by MDF on the 17th of November 2024. This WAD contains the following maps:
+```
+MAP02
+MAP03
+MAP07
+MAP10
+MAP12
+MAP25
+```
+
 ### dbabeon_cp.pk3
 An injection WAD for Don't Be a Bitch, but specifically the [EON Collection version](https://www.wad-archive.com/wad/be4e7fd2b3ae008a4ece98f4f2efab76cce62000). Created for the Dominatrix 8v8 Tournament hosted by MDF on the 27th of March 2022. Because DBAB doesn't use standard map names, this file needs to be loaded last as it overwrites the MAPINFO lump used in DBAB in order to allow for CP placement to work. While the extension is PK3, this is actually a WAD file. It was renamed to PK3 to ensure that Zandronum loads the file last (because the EON collection comes in PK3 format). This WAD contains the following maps:
 ```
