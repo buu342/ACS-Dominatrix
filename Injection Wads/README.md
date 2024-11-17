@@ -40,7 +40,7 @@ MAP16
 MAP21
 ```
 
-# cullingstrike_dom1.wad
+### cullingstrike_dom1.wad
 An injection WAD for [Culling Strike](https://www.doomworld.com/forum/topic/137962-culling-strike-zandronum-deathmatch-community-project/). Created for the Dominatrix 8v8 Tournament hosted by MDF on the 17th of November 2024. This WAD contains the following maps:
 ```
 MAP02
